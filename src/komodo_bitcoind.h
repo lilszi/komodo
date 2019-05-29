@@ -2334,7 +2334,7 @@ int32_t komodo_checkPOW(int32_t slowflag,CBlock *pblock,int32_t height)
     if ( failed == 0 && ASSETCHAINS_NOTARY_PAY[0] != 0 )
     {
         int32_t opretOffset = 0;
-        if ( pblock->vtx[0].vout.size() > 0 && pblock->vtx[0].vout[0].scriptPubKey.IsOpReturn() )
+        if ( pblock->vtx[0].vout.size() > 0 && pblock->vtx[0].vout.back().scriptPubKey.IsOpReturn() )
             opretOffset = 1;
         // We check the full validation in ConnectBlock directly to get the amount for coinbase. So just approx here.
         if ( slowflag == 0 && pblock->vtx[0].vout.size() > 1+opretOffset && pblock->vtx.size() > 1 )
