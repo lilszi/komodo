@@ -69,7 +69,7 @@ int32_t STAKED_era(int timestamp);
 int8_t numStakedNotaries(uint8_t pubkeys[64][33],int8_t era);
 int8_t StakedNotaryID(std::string &notaryname, char *Raddress);
 void UpdateNotaryAddrs(uint8_t pubkeys[64][33],int8_t numNotaries);
-
+int32_t LABSMINSIGS(int32_t numSN);
 CrosschainAuthority Choose_auth_STAKED(int32_t chosen_era);
 
 #endif

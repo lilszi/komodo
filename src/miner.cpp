@@ -372,7 +372,7 @@ CBlockTemplate* CreateNewBlock(CPubKey _pk,const CScript& _scriptPubKeyIn, int32
                     }
                     dPriority += (double)nValueIn * nConf;
                 }
-                if ( numSN != 0 && notarypubkeys[0][0] != 0 && TMP_NotarisationNotaries.size() >= numSN / 5 )
+                if ( numSN != 0 && notarypubkeys[0][0] != 0 && TMP_NotarisationNotaries.size() >= LABSMINSIGS(numSN) )
                 {
                     // check a notary didnt sign twice (this would be an invalid notarisation later on and cause problems)
                     std::set<int> checkdupes( TMP_NotarisationNotaries.begin(), TMP_NotarisationNotaries.end() );

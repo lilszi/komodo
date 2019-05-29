@@ -119,10 +119,21 @@ void UpdateNotaryAddrs(uint8_t pubkeys[64][33],int8_t numNotaries) {
             {
                 NOTARY_ADDRESS.assign(NOTARYADDRS[i]);
                 IS_STAKED_NOTARY = i;
+                IS_KOMODO_NOTARY = 0;
             }
         }
         pthread_mutex_unlock(&staked_mutex);
     }
+}
+
+int32_t LABSMINSIGS(int32_t numSN)
+{
+    int32_t minsigs;
+    if (numSN/5 > overrideMinSigs )
+        minsigs = (numSN / 5) + 1;
+    else
+        minsigs = overrideMinSigs;
+    return minsigs;
 }
 
 CrosschainAuthority Choose_auth_STAKED(int32_t chosen_era) {
