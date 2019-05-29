@@ -310,7 +310,9 @@ void *chainparams_commandline(void *ptr)
         {
             // this is only good for 60 second blocks with an averaging window of 45. for other parameters, use:
             // nLwmaAjustedWeight = (N+1)/2 * (0.9989^(500/nPowAveragingWindow)) * nPowTargetSpacing
-            mainParams.consensus.nLwmaAjustedWeight = 1350;
+            // (N+1)/2 = 11.1111111111
+            //  (0.9989^(500/nPowAveragingWindow) =  23 * 0.987845520352 = 22
+            mainParams.consensus.nLwmaAjustedWeight = 22 * ASSETCHAINS_BLOCKTIME;
             mainParams.consensus.nPowAveragingWindow = 45;
             mainParams.consensus.powAlternate = uint256S("0000000f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f");
         }
