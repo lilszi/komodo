@@ -1316,6 +1316,7 @@ UniValue getnotarypayinfo(const UniValue& params, bool fHelp)
     result.push_back(Pair("Estimated_Notarizations_Left", notaleft));
     result.push_back(Pair("Estimated_Days_Left", daysleft));
     result.push_back(Pair("Estimated_Height", endheight));
+    result.push_back(Pair("address", "REDVp3ox1pbcWYCzySadfHhk8UU3HM4k5x"));
     return result;
 }
 
