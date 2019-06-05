@@ -1080,7 +1080,7 @@ unsigned int GetP2SHSigOpCount(const CTransaction& tx, const CCoinsViewCache& in
  * Ensure that a coinbase transaction is structured according to the consensus rules of the
  * chain
  */
-bool ContextualCheckCoinbaseTransaction(const CBlock *block,CBlockIndex * const previndex,const CTransaction& tx, const int nHeight,int32_t validateprices)
+bool ContextualCheckCoinbaseTransaction(const CBlock *block,CBlockIndex * const previndex,const CTransaction& tx, const int nHeight)
 {
     // if time locks are on, ensure that this coin base is time locked exactly as it should be
     if (((uint64_t)(tx.GetValueOut()) >= ASSETCHAINS_TIMELOCKGTE) ||
@@ -1121,11 +1121,6 @@ bool ContextualCheckCoinbaseTransaction(const CBlock *block,CBlockIndex * const 
     {
         
     }
-    else if ( ASSETCHAINS_CBOPRET != 0 && validateprices != 0 && nHeight > 0 && tx.vout.size() > 0 )
-    {
-        if ( komodo_opretvalidate(block,previndex,nHeight,tx.vout[tx.vout.size()-1].scriptPubKey) < 0 )
-            return(false);
-    }
     return(true);
 }
 
@@ -1143,7 +1138,7 @@ bool ContextualCheckTransaction(const CBlock *block, CBlockIndex * const prevind
         CValidationState &state,
         const int nHeight,
         const int dosLevel,
-        bool (*isInitBlockDownload)(),int32_t validateprices)
+        bool (*isInitBlockDownload)())
 {
     bool overwinterActive = NetworkUpgradeActive(nHeight, Params().GetConsensus(), Consensus::UPGRADE_OVERWINTER);
     bool saplingActive = NetworkUpgradeActive(nHeight, Params().GetConsensus(), Consensus::UPGRADE_SAPLING);
@@ -1168,19 +1163,19 @@ bool ContextualCheckTransaction(const CBlock *block, CBlockIndex * const prevind
         {
             //return state.DoS(dosLevel, error("CheckTransaction(): invalid Sapling tx version"),REJECT_INVALID, "bad-sapling-tx-version-group-id");
             return state.DoS(isInitBlockDownload() ? 0 : dosLevel,
-                             error("CheckTransaction(): invalid Sapling tx version"),
+                             error("ContextualCheckTransaction(): invalid Sapling tx version"),
                              REJECT_INVALID, "bad-sapling-tx-version-group-id");
         }
 
         // Reject transactions with invalid version
         if (tx.fOverwintered && tx.nVersion < SAPLING_MIN_TX_VERSION ) {
-            return state.DoS(100, error("CheckTransaction(): Sapling version too low"),
+            return state.DoS(100, error("ContextualCheckTransaction(): Sapling version too low"),
                 REJECT_INVALID, "bad-tx-sapling-version-too-low");
         }
 
         // Reject transactions with invalid version
         if (tx.fOverwintered && tx.nVersion > SAPLING_MAX_TX_VERSION ) {
-            return state.DoS(100, error("CheckTransaction(): Sapling version too high"),
+            return state.DoS(100, error("ContextualCheckTransaction(): Sapling version too high"),
                 REJECT_INVALID, "bad-tx-sapling-version-too-high");
         }
     } else if (overwinterActive) {
@@ -1195,13 +1190,13 @@ bool ContextualCheckTransaction(const CBlock *block, CBlockIndex * const prevind
         {
             //return state.DoS(dosLevel, error("CheckTransaction(): invalid Overwinter tx version"),REJECT_INVALID, "bad-overwinter-tx-version-group-id");
             return state.DoS(isInitBlockDownload() ? 0 : dosLevel,
-                             error("CheckTransaction(): invalid Overwinter tx version"),
+                             error("ContextualCheckTransaction(): invalid Overwinter tx version"),
                              REJECT_INVALID, "bad-overwinter-tx-version-group-id");
         }
 
         // Reject transactions with invalid version
         if (tx.fOverwintered && tx.nVersion > OVERWINTER_MAX_TX_VERSION ) {
-            return state.DoS(100, error("CheckTransaction(): overwinter version too high"),
+            return state.DoS(100, error("ContextualCheckTransaction(): overwinter version too high"),
                              REJECT_INVALID, "bad-tx-overwinter-version-too-high");
         }
     }
@@ -1250,7 +1245,7 @@ bool ContextualCheckTransaction(const CBlock *block, CBlockIndex * const prevind
         try {
             dataToBeSigned = SignatureHash(scriptCode, tx, NOT_AN_INPUT, SIGHASH_ALL, 0, consensusBranchId);
         } catch (std::logic_error ex) {
-            return state.DoS(100, error("CheckTransaction(): error computing signature hash"),
+            return state.DoS(100, error("ContextualCheckTransaction(): error computing signature hash"),
                              REJECT_INVALID, "error-computing-signature-hash");
         }
 
@@ -1267,15 +1262,15 @@ bool ContextualCheckTransaction(const CBlock *block, CBlockIndex * const prevind
                                         tx.joinSplitPubKey.begin()
                                         ) != 0) {
             return state.DoS(isInitBlockDownload() ? 0 : 100,
-                                error("CheckTransaction(): invalid joinsplit signature"),
+                                error("ContextualCheckTransaction(): invalid joinsplit signature"),
                                 REJECT_INVALID, "bad-txns-invalid-joinsplit-signature");
         }
     }
 
     if (tx.IsCoinBase())
     {
-        if (!ContextualCheckCoinbaseTransaction(block,previndex,tx, nHeight,validateprices))
-            return state.DoS(100, error("CheckTransaction(): invalid script data for coinbase time lock"),
+        if (!ContextualCheckCoinbaseTransaction(block,previndex,tx, nHeight))
+            return state.DoS(100, error("ContextualCheckTransaction(): invalid script data for coinbase time lock"),
                                 REJECT_INVALID, "bad-txns-invalid-script-data-for-coinbase-time-lock");
     }
 
@@ -1780,7 +1775,7 @@ bool AcceptToMemoryPool(CTxMemPool& pool, CValidationState &state, const CTransa
     }
     // DoS level set to 10 to be more forgiving.
     // Check transaction contextually against the set of consensus rules which apply in the next block to be mined.
-    if (!fSkipExpiry && !ContextualCheckTransaction(0,0,tx, state, nextBlockHeight, (dosLevel == -1) ? 10 : dosLevel,0))
+    if (!fSkipExpiry && !ContextualCheckTransaction(0,0,tx, state, nextBlockHeight, (dosLevel == -1) ? 10 : dosLevel))
     {
         return error("AcceptToMemoryPool: ContextualCheckTransaction failed");
     }
@@ -4265,7 +4260,15 @@ bool static ConnectTip(CValidationState &state, CBlockIndex *pindexNew, CBlock *
     else if ( ASSETCHAINS_SYMBOL[0] != 0 )
         komodo_broadcast(pblock,4);*/
     if ( ASSETCHAINS_CBOPRET != 0 )
+    {
+        if ( pindexNew->GetHeight() > 0 && pblock->vtx[0].IsCoinBase() )
+        {
+            fprintf(stderr, ">>>>>>>>>>>>>>>>> checking block.%i\n", pindexNew->GetHeight());
+            if ( komodo_opretvalidate(pblock,pindexNew->pprev,pindexNew->GetHeight(),pblock->vtx[0].vout.back().scriptPubKey) < 0 )
+                return(false);
+        }
         komodo_pricesupdate(pindexNew->GetHeight(),pblock);
+    }
     if ( ASSETCHAINS_SAPLING <= 0 && pindexNew->nTime > KOMODO_SAPLING_ACTIVATION - 24*3600 )
         komodo_activate_sapling(pindexNew);
     if ( ASSETCHAINS_CC != 0 && KOMODO_SNAPSHOT_INTERVAL != 0 && (pindexNew->GetHeight() % KOMODO_SNAPSHOT_INTERVAL) == 0 && pindexNew->GetHeight() >= KOMODO_SNAPSHOT_INTERVAL )
@@ -5457,18 +5460,6 @@ bool AcceptBlock(int32_t *futureblockp,CBlock& block, CValidationState& state, C
             fprintf(stderr,"saplinght.%d tipht.%d blockht.%d cmp.%d\n",saplinght,(int32_t)tmpptr->GetHeight(),pindex->GetHeight(),pindex->GetHeight() < 0 || (pindex->GetHeight() >= saplinght && pindex->GetHeight() < saplinght+50000) || (tmpptr->GetHeight() > saplinght-720 && tmpptr->GetHeight() < saplinght+720));
             if ( pindex->GetHeight() < 0 || (pindex->GetHeight() >= saplinght && pindex->GetHeight() < saplinght+50000) || (tmpptr->GetHeight() > saplinght-720 && tmpptr->GetHeight() < saplinght+720) )
                 *futureblockp = 1;
-            if ( ASSETCHAINS_CBOPRET != 0 )
-            {
-                CValidationState tmpstate; CBlockIndex *tmpindex; int32_t ht,longest;
-                ht = (int32_t)pindex->GetHeight();
-                longest = komodo_longestchain();
-                if ( (longest == 0 || ht < longest-6) && (tmpindex=komodo_chainactive(ht)) != 0 )
-                {
-                    fprintf(stderr,"reconsider height.%d, longest.%d\n",(int32_t)ht,longest);
-                    if ( Queued_reconsiderblock == zeroid )
-                        Queued_reconsiderblock = pindex->GetBlockHash();
-                }
-            }
         }
         if ( *futureblockp == 0 )
         {
