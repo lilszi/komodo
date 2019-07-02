@@ -47,10 +47,13 @@ UniValue custom_rawtxresult(UniValue &result,std::string rawtx,int32_t broadcast
 
 UniValue custom_func0(uint64_t txfee,struct CCcontract_info *cp,cJSON *params)
 {
-    UniValue result(UniValue::VOBJ);
-    result.push_back(Pair("result","success"));
-    result.push_back(Pair("message","just an example of an information returning rpc"));
-    return(result);
+    CPubKey gametxidpk, playerpk; char gametxidaddr[64]={0}, coinaddr[64]={0}; uint256 gametxid;
+    gametxid = Parseuint256((char *)"a7e04fce4d71b6447281e2659dbed657d5c922e0cec02bdcb8115574f26509d5");
+    playerpk = pubkey2pk(Mypubkey());
+    gametxidpk = CCtxidaddr(gametxidaddr,gametxid);
+    GetCCaddress(cp,gametxidaddr,gametxidpk);
+    GetCCaddress1of2(cp,coinaddr,playerpk,gametxidpk);
+    fprintf(stderr, "unspendable address.%s spendable address.%s \n", gametxidaddr, coinaddr);
 }
 
 // send yourself 1 coin to your CC address using normal utxo from your -pubkey
@@ -81,6 +84,7 @@ UniValue custom_func1(uint64_t txfee,struct CCcontract_info *cp,cJSON *params)
 
 bool custom_validate(struct CCcontract_info *cp,int32_t height,Eval *eval,const CTransaction tx)
 {
+    return true;
     char expectedaddress[64]; CPubKey pk;
     CScript opret; int32_t numvout = 0;
     if ( has_opret(tx, EVAL_CUSTOM) == 0 )
