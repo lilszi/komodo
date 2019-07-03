@@ -155,6 +155,9 @@ typedef std::vector<uint8_t> vscript_t;
 extern CWallet* pwalletMain;
 #endif
 //extern CCoinsViewCache *pcoinsTip;
+
+bool SignCCtx(CMutableTransaction &mtx);
+
 bool GetAddressUnspent(uint160 addressHash, int type,std::vector<std::pair<CAddressUnspentKey,CAddressUnspentValue> > &unspentOutputs);
 CBlockIndex *komodo_getblockindex(uint256 hash);
 int32_t komodo_nextheight();
@@ -251,6 +254,19 @@ bool GetTokensCCaddress(struct CCcontract_info *cp, char *destaddr, CPubKey pk);
 bool GetTokensCCaddress1of2(struct CCcontract_info *cp, char *destaddr, CPubKey pk, CPubKey pk2);
 void CCaddrTokens1of2set(struct CCcontract_info *cp, CPubKey pk1, CPubKey pk2, char *coinaddr);
 int32_t CClib_initcp(struct CCcontract_info *cp,uint8_t evalcode);
+
+
+/* CC opt params stuff from Verus. Linker errors. Seems to need these functions placed at top of each CC file :( 
+template <typename SERIALIZABLE>
+uint256 GetHash(SERIALIZABLE obj);
+template <typename SERIALIZABLE>
+void FromVector(const std::vector<unsigned char> &vch, SERIALIZABLE &obj);
+template <typename SERIALIZABLE>
+std::vector<unsigned char> AsVector(SERIALIZABLE &obj);
+template <typename TOBJ>
+CTxOut MakeCC1of1Vout(uint8_t evalcode, CAmount nValue, CPubKey pk, TOBJ &obj);
+template <typename TOBJ>
+CTxOut MakeCC1of2Vout(uint8_t evalcode, CAmount nValue, CPubKey pk1, CPubKey pk2, TOBJ &obj); */
 
 bool IsCCInput(CScript const& scriptSig);
 bool CheckTxFee(const CTransaction &tx, uint64_t txfee, uint32_t height, uint64_t blocktime,int64_t &actualtxfee);

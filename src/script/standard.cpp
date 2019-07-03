@@ -84,7 +84,7 @@ COptCCParams::COptCCParams(std::vector<unsigned char> &vch)
                 evalCode = param[1];
                 m = param[2];
                 n = param[3];
-                if (version != VERSION || m != 1 || (n != 1 && n != 2) || data.size() <= n)
+                if (m != 1 || (n != 1 && n != 2) || data.size() <= n) //version != VERSION fuck this off we can use it for funcid. 
                 {
                     // we only support one version, and 1 of 1 or 1 of 2 now, so set invalid
                     version = 0;
@@ -132,6 +132,22 @@ std::vector<unsigned char> COptCCParams::AsVector()
         cData << std::vector<unsigned char>(d);
     }
     return std::vector<unsigned char>(cData.begin(), cData.end());
+}
+
+bool IsPayToCryptoCondition(const CScript &scr, COptCCParams &ccParams)
+{
+    CScript subScript;
+    std::vector<std::vector<unsigned char>> vParams;
+
+    if (scr.IsPayToCryptoCondition(&subScript, vParams))
+    {
+        if (!vParams.empty())
+        {
+            ccParams = COptCCParams(vParams[0]);
+        }
+        return true;
+    }
+    return false;
 }
 
 CScriptID::CScriptID(const CScript& in) : uint160(Hash160(in.begin(), in.end())) {}

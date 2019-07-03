@@ -25,6 +25,7 @@
 #include "script/cc.h"
 #include "cc/eval.h"
 #include "cryptoconditions/include/cryptoconditions.h"
+#include "standard.h"
 
 using namespace std;
 
@@ -390,7 +391,33 @@ bool CScript::IsPayToCryptoCondition(CScript *pCCSubScript) const
 
 bool CScript::IsPayToCryptoCondition() const
 {
-    return IsPayToCryptoCondition(NULL);
+    return IsPayToCryptoCondition((CScript *)NULL);
+}
+
+bool CScript::IsPayToCryptoCondition(CScript *ccSubScript, COptCCParams &optParams) const
+{
+    std::vector<std::vector<unsigned char>> vParams;
+    if (IsPayToCryptoCondition(ccSubScript, vParams))
+    {
+        if (vParams.size() > 0)
+        {
+            optParams = COptCCParams(vParams[0]);
+            return optParams.IsValid();
+        }
+    }
+    return false;
+}
+
+bool CScript::IsPayToCryptoCondition(uint32_t *ecode) const
+{
+    CScript sub;
+    COptCCParams p;
+    if (IsPayToCryptoCondition(&sub, p))
+    {
+        *ecode = p.evalCode;
+        return true;
+    }
+    return false;
 }
 
 bool CScript::MayAcceptCryptoCondition() const

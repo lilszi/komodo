@@ -19,13 +19,38 @@
 std::vector<CPubKey> NULL_pubkeys;
 
 /*
+    SignCCtx leverages the verus auto signing and only works when the vector of pubkeys is set in CCoptParams.
+    If one of the pubkeys appears in the users wallet then the corrospoonding privkey will be used to sign the tx 
+    if no pubkeys are found the global CC privkey will be used. 
+*/
+ 
+bool SignCCtx(CMutableTransaction &mtx)
+{
+    int i = 0, n = 0;
+    for ( auto vin : mtx.vin )
+    {
+        CTransaction vintx; uint256 hashBlock;
+        if ( GetTransaction(vin.prevout.hash, vintx, hashBlock, false) != 0 )
+        {
+            int32_t utxovout = mtx.vin[i].prevout.n;
+            if ( SignTx(mtx,i,vintx.vout[utxovout].nValue,vintx.vout[utxovout].scriptPubKey) )
+                n++;
+            else 
+                fprintf(stderr,"signing error for vini.%i of %li\n",i, mtx.vin.size());
+        }
+        i++;
+    }
+    return i=n;
+}
+
+/*
  FinalizeCCTx is a very useful function that will properly sign both CC and normal inputs, adds normal change and the opreturn.
 
  This allows the contract transaction functions to create the appropriate vins and vouts and have FinalizeCCTx create a properly signed transaction.
 
  By using -addressindex=1, it allows tracking of all the CC addresses
  */
-
+ 
 bool SignTx(CMutableTransaction &mtx,int32_t vini,int64_t utxovalue,const CScript scriptPubKey)
 {
 #ifdef ENABLE_WALLET

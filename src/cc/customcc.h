@@ -43,3 +43,92 @@ if ( cp->evalcode == EVAL_CUSTOM ) \
         return(result); \
     } \
 }
+
+template <typename SERIALIZABLE>
+std::vector<unsigned char> AsVector(SERIALIZABLE &obj)
+{
+    CDataStream s = CDataStream(SER_NETWORK, PROTOCOL_VERSION);
+    s << obj;
+    return std::vector<unsigned char>(s.begin(), s.end());
+}
+
+template <typename SERIALIZABLE>
+void FromVector(const std::vector<unsigned char> &vch, SERIALIZABLE &obj)
+{
+    CDataStream s(vch, SER_NETWORK, PROTOCOL_VERSION);
+    obj.Unserialize(s);
+}
+
+template <typename SERIALIZABLE>
+uint256 GetHash(SERIALIZABLE obj)
+{
+    CHashWriter hw(SER_GETHASH, PROTOCOL_VERSION);
+    hw << obj;
+    return hw.GetHash();
+}
+
+class CGameCreate
+{
+public:
+    uint8_t nVersion = 1;
+    std::string name = "";
+    CPubKey playerpk;
+    
+    CGameCreate() {}
+    CGameCreate(const CTxOut &);
+    CGameCreate(std::string _name, CPubKey _playerpk) :
+        name(_name), playerpk(_playerpk) {}
+    
+    ADD_SERIALIZE_METHODS;
+
+    template <typename Stream, typename Operation>
+    inline void SerializationOp(Stream& s, Operation ser_action) {
+        READWRITE(nVersion);
+        READWRITE(name);
+        READWRITE(playerpk);
+    }
+
+    std::vector<unsigned char> AsVector()
+    {
+        return ::AsVector(*this);
+    }
+
+    bool IsValid()
+    {
+        return !name.empty();
+    }
+};
+
+class CEvents
+{
+public:
+    uint8_t nVersion = 1;
+    uint32_t counter;
+    uint256 gametxid = zeroid;
+    std::vector<uint8_t> events;
+    
+    CEvents() {}
+    CEvents(const CTxOut &);
+    CEvents(uint32_t _counter, uint256 _gametxid, std::vector<uint8_t> _events) :
+        counter(_counter), gametxid(_gametxid), events(_events) {}
+    
+    ADD_SERIALIZE_METHODS;
+
+    template <typename Stream, typename Operation>
+    inline void SerializationOp(Stream& s, Operation ser_action) {
+        READWRITE(nVersion);
+        READWRITE(counter);
+        READWRITE(gametxid);
+        READWRITE(events);
+    }
+
+    std::vector<unsigned char> AsVector()
+    {
+        return ::AsVector(*this);
+    }
+
+    bool IsValid()
+    {
+        return gametxid != zeroid;
+    };
+};

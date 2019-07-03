@@ -174,4 +174,35 @@ bool ExtractDestinations(const CScript& scriptPubKey, txnouttype& typeRet, std::
 CScript GetScriptForDestination(const CTxDestination& dest);
 CScript GetScriptForMultisig(int nRequired, const std::vector<CPubKey>& keys);
 
+bool IsPayToCryptoCondition(const CScript &scr, COptCCParams &ccParams);
+
+template <typename T>
+bool IsPayToCryptoCondition(const CScript &scr, COptCCParams &ccParams, T &extraObject)
+{
+    CScript subScript;
+    std::vector<std::vector<unsigned char>> vParams;
+    COptCCParams p;
+
+    if (scr.IsPayToCryptoCondition(&subScript, vParams))
+    {
+        if (!vParams.empty())
+        {
+            ccParams = COptCCParams(vParams[0]);
+            if (ccParams.IsValid() && ccParams.vData.size() > 0)
+            {
+                try
+                {
+                    extraObject = T(ccParams.vData[0]);
+                }
+                catch(const std::exception& e)
+                {
+                    std::cerr << e.what() << '\n';
+                }
+            }
+        }
+        return true;
+    }
+    return false;
+}
+
 #endif // BITCOIN_SCRIPT_STANDARD_H
