@@ -105,6 +105,7 @@ UniValue custom_rawtxresult(UniValue &result,std::string rawtx,int32_t broadcast
     return(result);
 }
 
+
 UniValue custom_create(uint64_t txfee,struct CCcontract_info *cp,cJSON *params)
 {
     /* Create game tx. 
@@ -193,11 +194,100 @@ UniValue custom_bet(uint64_t txfee,struct CCcontract_info *cp,cJSON *params)
     return result;
 }
 
+int64_t custom_GetBets(struct CCcontract_info *cp, const uint256 &createtxid, const CCreate &GameObj, std::map <CPubKey, CAmount> &mPubKeyAmounts, int64_t &secondsleft, int32_t &totalPubKeys)
+{
+    char gameaddr[64]; CPubKey txidpk, ccpubkey; std::vector<std::pair<CAddressUnspentKey, CAddressUnspentValue> > unspentOutputs; CAmount total = 0; CPubKey pubkey;
+    txidpk = CCtxidaddr(gameaddr,createtxid);
+    ccpubkey = GetUnspendable(cp,0);
+    GetCCaddress1of2(cp,gameaddr,txidpk,ccpubkey);
+    SetCCunspents(unspentOutputs,gameaddr,true);
+    secondsleft = GameObj.timestamp-komodo_heightstamp(chainActive.Height());
+    for ( auto utxo : unspentOutputs )
+    {
+        //fprintf(stderr, "txid.%s vout.%li scriptpk.%s sats.%li blockht.%i\n", utxo.first.txhash.GetHex().c_str(),utxo.first.index, utxo.second.script.ToString().c_str(), utxo.second.satoshis, utxo.second.blockHeight);
+        CBet BetObj; 
+        if ( IsValidObject(utxo.second.script, BetObj) && BetObj.satoshis == utxo.second.satoshis )
+        {
+            //fprintf(stderr, "createtxid.%s sats.%li pubkey.%s funcid.%i\n", BetObj.createtxid.GetHex().c_str(), BetObj.satoshis, HexStr(BetObj.payoutpubkey).c_str(), BetObj.funcid);
+            pubkey = BetObj.payoutpubkey;
+            std::map <CPubKey, CAmount>::iterator pos = mPubKeyAmounts.find(pubkey);
+            if ( pos == mPubKeyAmounts.end() )
+            {
+                // insert new address + utxo amount
+                mPubKeyAmounts[pubkey] = BetObj.satoshis;
+                totalPubKeys++;
+            }
+            else
+            {
+                // update unspent tally for this address
+                mPubKeyAmounts[pubkey] += BetObj.satoshis;
+            }
+            total += utxo.second.satoshis;
+        }
+    }
+    return total;
+}
+
+bool custom_hasResult(struct CCcontract_info *cp, const CCreate &GameObj, const uint256 &createtxid, CPubKey &winner, CAmount &totalAmountBet)
+{
+    std::string symbol; Notarisation nota1, nota2; std::map <CPubKey, CAmount> mPubKeyAmounts; int64_t secondsleft; int32_t totalPubKeys; CAmount total;
+    symbol.assign(ASSETCHAINS_SYMBOL);
+    int32_t n, i; int64_t x, y; 
+    // find the first block past the timestamp, then scan forwards to get a notarized notarization. 
+    for ( i = chainActive.Height(); i > 0; i-- )
+    {
+        if ( chainActive[i]->nTime < GameObj.timestamp )
+            break; 
+    }
+    if ( i == 0 ) 
+        return false;
+    i++; // block after the one found is first past the timestamp. 
+    if ( (n= ScanNotarisationsDBForwards(i, symbol, 1440, nota1)) == 0 )
+        return false;
+    // found first notarizaton after the timestamp, keep scanning forwards for the next one. 
+    if ( ScanNotarisationsDBForwards(n+1, symbol, 1440, nota2) == 0 )
+        return false;
+    
+    // Create the random number from this notarization.
+    memcpy(&x,&nota1.second.MoMoM ,sizeof(x)); 
+    
+    //uint256 blockHash = *chainActive[i-20]->phashBlock;
+    //memcpy(&x,&blockHash ,sizeof(x)); 
+    if ( x < 0 ) x = -x;
+    
+    // Sum all the pubkeys balances same as in status RPC. 
+    if ( (total= custom_GetBets(cp, createtxid, GameObj, mPubKeyAmounts, secondsleft, totalPubKeys)) == 0 )
+        return false;
+    
+    // Cacluate the odds from the amounts bet 
+    int64_t bestChance = std::numeric_limits<int64_t>::max();
+    for ( auto element : mPubKeyAmounts )
+    {
+        memcpy(&y,&element.first,sizeof(y));
+        if ( y < 0 ) y = -y;
+        //fprintf(stderr, "y.%li vs x.%li\n",y,x);
+        int64_t chance = x - y; 
+        if ( chance < 0 ) chance = -chance;
+        //fprintf(stderr, "chance.%li vs rndnumber.%li amountbet.%li\n",chance, x, element.second);
+        int64_t weight = (element.second * 100) / total;
+        int64_t adjustedchance = chance / weight;
+        fprintf(stderr, "weight.%li adjusted chance.%li\n", weight, adjustedchance);
+        if ( adjustedchance < bestChance )
+        {
+             bestChance = adjustedchance;
+             winner = element.first;
+             totalAmountBet = element.second;
+        }
+        fprintf(stderr, "bestchoice.%li pubkey.%s\n", bestChance, HexStr(winner).c_str());
+    }
+    return bestChance != std::numeric_limits<int64_t>::max();
+}
+
 UniValue custom_status(uint64_t txfee,struct CCcontract_info *cp,cJSON *params)
 {
-    UniValue result(UniValue::VOBJ); UniValue pubkeys(UniValue::VARR); uint256 createtxid = zeroid, hashBlock; CTransaction createtx; CPubKey txidpk, ccpubkey; char gameaddr[64];
-    std::vector<std::pair<CAddressUnspentKey, CAddressUnspentValue> > unspentOutputs; CAmount total = 0; std::string pubkey; int64_t timeleft;
-    std::map <std::string, CAmount> mPubKeyAmounts; int32_t totalPubKeys = 0;
+    UniValue result(UniValue::VOBJ); UniValue pubkeys(UniValue::VARR); uint256 createtxid = zeroid, hashBlock; CTransaction createtx; CPubKey winner; 
+    CAmount total, totalAmountBet; int64_t secondsleft;
+    std::map <CPubKey, CAmount> mPubKeyAmounts; int32_t totalPubKeys = 0;
     if ( params != 0 && cJSON_GetArraySize(params) == 1 )
     {
         createtxid = juint256(jitem(params,0));
@@ -206,40 +296,12 @@ UniValue custom_status(uint64_t txfee,struct CCcontract_info *cp,cJSON *params)
             CCreate GameObj; COptCCParams ccp;
             if ( createtx.vout.size() > 0 && IsPayToCryptoCondition(createtx.vout[0].scriptPubKey, ccp, GameObj) && GameObj.IsValid() )
             {
-                txidpk = CCtxidaddr(gameaddr,createtxid);
-                ccpubkey = GetUnspendable(cp,0);
-                GetCCaddress1of2(cp,gameaddr,txidpk,ccpubkey);
-                SetCCunspents(unspentOutputs,gameaddr,true);
-                secondsleft =  GameObj.timestamp-komodo_heightstamp(chainActive.Height());
-                for ( auto utxo : unspentOutputs )
-                {
-                    //fprintf(stderr, "txid.%s vout.%li scriptpk.%s sats.%li blockht.%i\n", utxo.first.txhash.GetHex().c_str(),utxo.first.index, utxo.second.script.ToString().c_str(), utxo.second.satoshis, utxo.second.blockHeight);
-                    CBet BetObj; 
-                    if ( IsValidObject(utxo.second.script, BetObj) )
-                    {
-                        //fprintf(stderr, "createtxid.%s sats.%li pubkey.%s funcid.%i\n", BetObj.createtxid.GetHex().c_str(), BetObj.satoshis, HexStr(BetObj.payoutpubkey).c_str(), BetObj.funcid);
-                        pubkey = HexStr(BetObj.payoutpubkey);
-                        std::map <std::string, CAmount>::iterator pos = mPubKeyAmounts.find(pubkey);
-                        if ( pos == mPubKeyAmounts.end() )
-                        {
-                            // insert new address + utxo amount
-                            mPubKeyAmounts[pubkey] = BetObj.satoshis;
-                            totalPubKeys++;
-                        }
-                        else
-                        {
-                            // update unspent tally for this address
-                            mPubKeyAmounts[pubkey] += BetObj.satoshis;
-                        }
-                        total += utxo.second.satoshis;
-                    }
-                }
-                if ( total != 0 )
+                if ( (total= custom_GetBets(cp, createtxid, GameObj, mPubKeyAmounts, secondsleft, totalPubKeys)) != 0 )
                 {
                     for ( auto element : mPubKeyAmounts )
                     {
                         UniValue pubkeyobj(UniValue::VOBJ);
-                        pubkeyobj.push_back(Pair(element.first, element.second));
+                        pubkeyobj.push_back(Pair(HexStr(element.first), element.second));
                         pubkeys.push_back(pubkeyobj);
                     }
                     result.push_back(Pair("pubkeys",pubkeys));
@@ -248,19 +310,20 @@ UniValue custom_status(uint64_t txfee,struct CCcontract_info *cp,cJSON *params)
                     result.push_back(Pair("end_time", GameObj.timestamp));
                     if ( secondsleft > 0 )
                         result.push_back(Pair("seconds_left", secondsleft));
+                } 
+                if ( secondsleft < 0 )
+                {
+                    if ( custom_hasResult(cp, GameObj, createtxid, winner, totalAmountBet) )
+                    {
+                        result.push_back(Pair("winner", HexStr(winner)));
+                        result.push_back(Pair("total_amount_bet", totalAmountBet));
+                        result.push_back(Pair("claimed", total == 0 ? "true" : "false"));
+                    }
                     else 
                     {
-                        // Here we should check if the game has been paid out or can be paid out. 
-                        // If the game has a result, publish the winner. 
-                        result.push_back("this game is finished");
+                        result.push_back("Waiting for next notarized MoMoM hash...");
                     }
-                } 
-                else if ( secondsleft < 0 )
-                {
-                    // It may have been paid out. Extract the winner and display the winning pubkey and the releasing pubkey.
-                    
                 }
-                return(cclib_error(result,"no bets found"));
             } else return(cclib_error(result,"createtxid is not valid"));
         } else return(cclib_error(result,"createtxid not found"));
     } else return(cclib_error(result,"not enough parameters"));

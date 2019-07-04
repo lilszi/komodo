@@ -157,6 +157,10 @@ extern CWallet* pwalletMain;
 //extern CCoinsViewCache *pcoinsTip;
 
 bool SignCCtx(CMutableTransaction &mtx);
+class NotarisationData;
+typedef std::pair<uint256,NotarisationData> Notarisation;
+typedef std::vector<Notarisation> NotarisationsInBlock;
+int ScanNotarisationsDBForwards(int height, std::string symbol, int scanLimitBlocks, Notarisation& out);
 
 bool GetAddressUnspent(uint160 addressHash, int type,std::vector<std::pair<CAddressUnspentKey,CAddressUnspentValue> > &unspentOutputs);
 CBlockIndex *komodo_getblockindex(uint256 hash);
