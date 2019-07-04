@@ -42,25 +42,51 @@
  }
  // --------------------------------------------------------------------------------------------
   
- CEvents::CEvents(const CTxOut &vout)
- {
-     COptCCParams p;
-     // Get info from opt params
-     if (IsPayToCryptoCondition(vout.scriptPubKey, p) && p.IsValid() && p.evalCode == EVAL_CUSTOM && p.version == 'E')
-     {
-         FromVector(p.vData[0], *this);
-     }
- }
+CCreate::CCreate(const CScript &scriptPubKey)
+{
+    COptCCParams p;
+    // Get info from opt params
+    // version acts as funcid
+    if (IsPayToCryptoCondition(scriptPubKey, p) && p.IsValid() && p.evalCode == EVAL_CUSTOM && p.version == 'C')
+    {
+        FromVector(p.vData[0], *this);
+        if ( this->funcid != 'C' )
+        {
+            // funcid mismatch set name to 0, to invalidate this object. 
+            name = "";
+        }
+    }
+}
  
- CGameCreate::CGameCreate(const CTxOut &vout)
- {
-     COptCCParams p;
-     // Get info from opt params
-     if (IsPayToCryptoCondition(vout.scriptPubKey, p) && p.IsValid() && p.evalCode == EVAL_CUSTOM && p.version == 'C')
-     {
-         FromVector(p.vData[0], *this);
-     }
- }
+CBet::CBet(const CScript &scriptPubKey)
+{
+    COptCCParams p;
+    // Get info from opt params
+    if (IsPayToCryptoCondition(scriptPubKey, p) && p.IsValid() && p.evalCode == EVAL_CUSTOM && p.version == 'B')
+    {
+        FromVector(p.vData[0], *this);
+        if ( this->funcid != 'B' )
+        {
+            // funcid mismatch invalidate this object. 
+            createtxid = zeroid;
+        }
+    }
+}
+ 
+CWithdraw::CWithdraw(const CScript &scriptPubKey)
+{
+    COptCCParams p;
+    // Get info from opt params
+    if (IsPayToCryptoCondition(scriptPubKey, p) && p.IsValid() && p.evalCode == EVAL_CUSTOM && p.version == 'W')
+    {
+        FromVector(p.vData[0], *this);
+        if ( this->funcid != 'W' )
+        {
+            // funcid mismatch invalidate this object. 
+            createtxid = zeroid;
+        }
+    }
+}
 
 UniValue custom_rawtxresult(UniValue &result,std::string rawtx,int32_t broadcastflag)
 {
@@ -79,192 +105,199 @@ UniValue custom_rawtxresult(UniValue &result,std::string rawtx,int32_t broadcast
     return(result);
 }
 
-UniValue custom_func2(uint64_t txfee,struct CCcontract_info *cp,cJSON *params)
+UniValue custom_create(uint64_t txfee,struct CCcontract_info *cp,cJSON *params)
 {
     /* Create game tx. 
     normal vins 
     vout1 -> CC_CUSTOM main CC address: unspendable in validation. 
-    version/funcid = 'F'
-    // Returns a TXID that will be used to make this game address.
+    version/funcid = 'C'
+    Returns a TXID that will be used to make this game's address.
     */
-    CPubKey playerpk; CAmount totalin;
     CMutableTransaction mtx = CreateNewContextualCMutableTransaction(Params().GetConsensus(), komodo_nextheight()); std::string rawtx;
-    playerpk = pubkey2pk(Mypubkey());
-    std::string name = "atestname";
-    UniValue result(UniValue::VOBJ); int64_t amount = CUSTOM_TXFEE; int32_t broadcastflag=0;
+    CPubKey mypk = pubkey2pk(Mypubkey());
+    std::string name; int32_t n; int64_t timestamp; CAmount total;
+    UniValue result(UniValue::VOBJ); int32_t broadcastflag=1;
     if ( txfee == 0 )
         txfee = CUSTOM_TXFEE;
-    if ( AddNormalinputs(mtx,playerpk,txfee*2,64) >= txfee*2 ) // add utxo to mtx
+    
+    if ( params != 0 && ((n= cJSON_GetArraySize(params)) == 2) )
     {
-        CGameCreate GameObj = CGameCreate(name, playerpk);
-        mtx.vout.push_back(MakeCC1of1Vout('C',cp->evalcode,amount,GetUnspendable(cp,0),GameObj));
-        rawtx = FinalizeCCTx(0,cp,mtx,playerpk,txfee,CScript());
-        return(custom_rawtxresult(result,rawtx,broadcastflag));
-    }
+        name.assign(jstr(jitem(params,0),0));
+        if ( name.empty() )
+        {
+            return(cclib_error(result,"name cannot be empty"));
+        }
+        timestamp = juint(jitem(params,1),0);
+        if ( timestamp < komodo_heightstamp(chainActive.Height()+ASSETCHAINS_BLOCKTIME*20) )
+        {
+            fprintf(stderr, "now.%li vs timestamp.%li now+25blocks.%li\n", time(NULL), timestamp, (time(NULL)+ASSETCHAINS_BLOCKTIME*25));
+            return(cclib_error(result,"finish time must be at least 20 blocks in the future."));
+        }
+        if ( (total= AddNormalinputs(mtx,mypk,txfee*2,64)) >= txfee*2 ) // add utxo to mtx
+        {
+            uint8_t funcid = 'C';
+            CCreate GameObj = CCreate(funcid, name, timestamp);
+            mtx.vout.push_back(MakeCC1of1Vout(funcid,cp->evalcode,txfee,GetUnspendable(cp,0),GameObj));
+            CAmount change = total - 2*txfee;
+            mtx.vout.push_back(CTxOut(change,CScript() << ParseHex(HexStr(mypk)) << OP_CHECKSIG));
+            if ( SignCCtx(mtx) )
+                return(custom_rawtxresult(result,EncodeHexTx(mtx),broadcastflag));
+            else return(cclib_error(result,"signing error"));
+        }
+    } else return(cclib_error(result,"not enough parameters"));
     return(result);
 }
 
-UniValue custom_func0(uint64_t txfee,struct CCcontract_info *cp,cJSON *params)
+UniValue custom_bet(uint64_t txfee,struct CCcontract_info *cp,cJSON *params)
 {
-    /* Fund Diablo address for playerpk 
-    normal imputs 
-    X outputs depnding on amount sent. 
-    send in amounts equal to tx fee 
-    must be to playerpk CC_CUSTOM address 
-    version/funcid = 'F'
+    /* Bet transaction
+    normal vins 
+    vout1 -> createtxid address, 1of2 with global pubkey to allow winner to spend these inputs. 
+    version/funcid = 'B'
+    json args is just createtxid 
     */
-    CMutableTransaction mtx = CreateNewContextualCMutableTransaction(Params().GetConsensus(), komodo_nextheight());
-    UniValue result(UniValue::VOBJ);
-    int number = 10; // number of utxos to fund. 
-    CPubKey gametxidpk, playerpk; char gametxidaddr[64]={0};
-    playerpk = pubkey2pk(Mypubkey());
-    if ( txfee == 0 )
-        txfee = CUSTOM_TXFEE;
-    if ( AddNormalinputs(mtx,playerpk,txfee*2*number,64) >= txfee*2*number )
+    UniValue result(UniValue::VOBJ); uint256 createtxid = zeroid, hashBlock; CTransaction createtx; CPubKey txidpk; char gameaddr[64]; CAmount amount = 0, total;
+    CMutableTransaction mtx = CreateNewContextualCMutableTransaction(Params().GetConsensus(), komodo_nextheight()); std::string rawtx; int32_t broadcastflag=1;
+    CPubKey mypk = pubkey2pk(Mypubkey());
+    
+    if ( params != 0 && cJSON_GetArraySize(params) == 2 )
     {
-        for ( int i = 0; i < number; i++ )
+        createtxid = juint256(jitem(params,0));
+        amount = jdouble(jitem(params,1),0)*COIN + 0.0000000049;
+        if ( amount < 0 ) 
+            return(cclib_error(result,"amount cannot be zero"));
+        if ( createtxid != zeroid && myGetTransaction(createtxid, createtx, hashBlock) != 0 )
         {
-            CGameCreate dummy = CGameCreate();
-            mtx.vout.push_back(MakeCC1of1Vout('F', cp->evalcode, txfee*2, playerpk, dummy));
-        }
-        return(custom_rawtxresult(result,FinalizeCCTx(0,cp,mtx,playerpk,txfee,CScript()),1));
-    }
-    return 0;
+            CCreate GameObj; COptCCParams ccp;
+            if ( createtx.vout.size() > 0 && IsPayToCryptoCondition(createtx.vout[0].scriptPubKey, ccp, GameObj) && GameObj.IsValid() )
+            {
+                if ( GameObj.timestamp > komodo_heightstamp(chainActive.Height()) )
+                {
+                    // we will need a refund path, for bets that are confirmed after the result is known
+                    if ( (total= AddNormalinputs(mtx,mypk,amount+txfee,64)) >= amount+txfee ) 
+                    {
+                        uint8_t funcid = 'B';
+                        txidpk = CCtxidaddr(gameaddr,createtxid);
+                        CBet BetObj = CBet(funcid, createtxid, amount, mypk);
+                        mtx.vout.push_back(MakeCC1of2Vout(funcid, EVAL_CUSTOM, amount, txidpk, GetUnspendable(cp,0), BetObj));
+                        CAmount change = total - amount - txfee;
+                        mtx.vout.push_back(CTxOut(change,CScript() << ParseHex(HexStr(mypk)) << OP_CHECKSIG));
+                        if ( SignCCtx(mtx) )
+                            return(custom_rawtxresult(result,EncodeHexTx(mtx),broadcastflag));
+                        else return(cclib_error(result,"signing error"));
+                    } else return(cclib_error(result,"not enough normal inputs"));
+                } else return(cclib_error(result,"this game is over"));
+            } else return(cclib_error(result,"createtxid is not valid"));
+        } else return(cclib_error(result,"createtxid not found"));
+    } else return(cclib_error(result,"not enough parameters"));
+    return result;
 }
 
-UniValue custom_func1(uint64_t txfee,struct CCcontract_info *cp,cJSON *params)
+UniValue custom_status(uint64_t txfee,struct CCcontract_info *cp,cJSON *params)
 {
-    /* Events, spend from  Diablo address for playerpk to the 
-    gametxidpk + playerpk 1of2 address 
-    validation must check that vins came from Diablo address for playerpk.
-    tx will build up in this address and only playerpk can spend to it, anything else sent here is filtered out 
-    This allows extraction of events objects direct from the addressindex, sorted by the counter. 
-    Unless the player sends a spoofed tx with incorrect data it will only contain the correct data. 
-    Players can only break their own games, no other person can do this without their private key. 
-    */
-    CPubKey gametxidpk, playerpk; char playeraddr[64]={0}; UniValue result(UniValue::VOBJ); int32_t broadcastflag=0;
-    CMutableTransaction mtx = CreateNewContextualCMutableTransaction(Params().GetConsensus(), komodo_nextheight()); std::string rawtx;
-    std::vector<std::pair<CAddressUnspentKey, CAddressUnspentValue> > unspentOutputs; CScript ccopret;
+    UniValue result(UniValue::VOBJ); UniValue pubkeys(UniValue::VARR); uint256 createtxid = zeroid, hashBlock; CTransaction createtx; CPubKey txidpk, ccpubkey; char gameaddr[64];
+    std::vector<std::pair<CAddressUnspentKey, CAddressUnspentValue> > unspentOutputs; CAmount total = 0; std::string pubkey; int64_t timeleft;
+    std::map <std::string, CAmount> mPubKeyAmounts; int32_t totalPubKeys = 0;
+    if ( params != 0 && cJSON_GetArraySize(params) == 1 )
+    {
+        createtxid = juint256(jitem(params,0));
+        if ( createtxid != zeroid && myGetTransaction(createtxid, createtx, hashBlock) != 0 )
+        {
+            CCreate GameObj; COptCCParams ccp;
+            if ( createtx.vout.size() > 0 && IsPayToCryptoCondition(createtx.vout[0].scriptPubKey, ccp, GameObj) && GameObj.IsValid() )
+            {
+                txidpk = CCtxidaddr(gameaddr,createtxid);
+                ccpubkey = GetUnspendable(cp,0);
+                GetCCaddress1of2(cp,gameaddr,txidpk,ccpubkey);
+                SetCCunspents(unspentOutputs,gameaddr,true);
+                secondsleft =  GameObj.timestamp-komodo_heightstamp(chainActive.Height());
+                for ( auto utxo : unspentOutputs )
+                {
+                    //fprintf(stderr, "txid.%s vout.%li scriptpk.%s sats.%li blockht.%i\n", utxo.first.txhash.GetHex().c_str(),utxo.first.index, utxo.second.script.ToString().c_str(), utxo.second.satoshis, utxo.second.blockHeight);
+                    CBet BetObj; 
+                    if ( IsValidObject(utxo.second.script, BetObj) )
+                    {
+                        //fprintf(stderr, "createtxid.%s sats.%li pubkey.%s funcid.%i\n", BetObj.createtxid.GetHex().c_str(), BetObj.satoshis, HexStr(BetObj.payoutpubkey).c_str(), BetObj.funcid);
+                        pubkey = HexStr(BetObj.payoutpubkey);
+                        std::map <std::string, CAmount>::iterator pos = mPubKeyAmounts.find(pubkey);
+                        if ( pos == mPubKeyAmounts.end() )
+                        {
+                            // insert new address + utxo amount
+                            mPubKeyAmounts[pubkey] = BetObj.satoshis;
+                            totalPubKeys++;
+                        }
+                        else
+                        {
+                            // update unspent tally for this address
+                            mPubKeyAmounts[pubkey] += BetObj.satoshis;
+                        }
+                        total += utxo.second.satoshis;
+                    }
+                }
+                if ( total != 0 )
+                {
+                    for ( auto element : mPubKeyAmounts )
+                    {
+                        UniValue pubkeyobj(UniValue::VOBJ);
+                        pubkeyobj.push_back(Pair(element.first, element.second));
+                        pubkeys.push_back(pubkeyobj);
+                    }
+                    result.push_back(Pair("pubkeys",pubkeys));
+                    result.push_back(Pair("total_funds", total));
+                    result.push_back(Pair("total_pubkeys", totalPubKeys));
+                    result.push_back(Pair("end_time", GameObj.timestamp));
+                    if ( secondsleft > 0 )
+                        result.push_back(Pair("seconds_left", secondsleft));
+                    else 
+                    {
+                        // Here we should check if the game has been paid out or can be paid out. 
+                        // If the game has a result, publish the winner. 
+                        result.push_back("this game is finished");
+                    }
+                } 
+                else if ( secondsleft < 0 )
+                {
+                    // It may have been paid out. Extract the winner and display the winning pubkey and the releasing pubkey.
+                    
+                }
+                return(cclib_error(result,"no bets found"));
+            } else return(cclib_error(result,"createtxid is not valid"));
+        } else return(cclib_error(result,"createtxid not found"));
+    } else return(cclib_error(result,"not enough parameters"));
+    return result;
+}
+
+UniValue custom_list(uint64_t txfee,struct CCcontract_info *cp,cJSON *params)
+{
+    bool fShowFinished = false; UniValue result(UniValue::VARR); char coinaddr[64]={0}; std::vector<std::pair<CAddressUnspentKey, CAddressUnspentValue> > unspentOutputs;
+    GetCCaddress(cp,coinaddr,GetUnspendable(cp,0));
+    SetCCunspents(unspentOutputs,coinaddr,true);
     
-    uint256 gametxid = Parseuint256((char *)"014752e10b1634a62bd9b1caa39d8ded95ed1eab183768cdae2ee09bd913970a");
-    gametxidpk = CCtxidaddr(playeraddr,gametxid);
-    playerpk = pubkey2pk(Mypubkey());
+    if ( params != 0 )
+        fShowFinished = true;
     
-    if ( txfee == 0 )
-        txfee = CUSTOM_TXFEE;
-    GetCCaddress(cp,playeraddr,playerpk);           // get address for EVAL_CUSTOM playerpk address
-    SetCCunspents(unspentOutputs,playeraddr,true);  // Get all unspent cc_vouts in this address. 
-    // loop our vouts and add one to our tx. 
     for ( auto utxo : unspentOutputs )
     {
-        // no need to check where funding came from, we are the only privkey that can spend these utxos 
         //fprintf(stderr, "txid.%s vout.%li scriptpk.%s sats.%li blockht.%i\n", utxo.first.txhash.GetHex().c_str(),utxo.first.index, utxo.second.script.ToString().c_str(), utxo.second.satoshis, utxo.second.blockHeight);
-        CScript dummy; COptCCParams ccp;
-        if ( utxo.second.satoshis == txfee*2 && utxo.second.script.IsPayToCryptoCondition(&dummy, ccp) != 0 && ccp.vKeys.size() == 1 )
+        CCreate GameObj;
+        if ( IsValidObject( utxo.second.script, GameObj) )
         {
-            fprintf(stderr, "txid.%s vout.%li ccp.vKeys.size.%li m.%i n.%i\n", utxo.first.txhash.GetHex().c_str(),utxo.first.index, ccp.vKeys.size(), ccp.m, ccp.n);
-            mtx.vin.push_back(CTxIn(utxo.first.txhash,utxo.first.index,CScript()));
-            break; // we only need 1 utxo for each event tx. 
+            //fprintf(stderr, "gameobj.name.%s gameobj.timestamp.%li funcid.%i\n",GameObj.name.c_str(), GameObj.timestamp, GameObj.funcid);
+            if ( fShowFinished )
+                result.push_back(utxo.first.txhash.GetHex());
+            else if ( GameObj.timestamp > komodo_heightstamp(chainActive.Height()) )
+                result.push_back(utxo.first.txhash.GetHex());
         }
     }
-    
-    static int counter = 0; // just for now, game will supply increments 
-    
-    if ( mtx.vin.size() == 1 ) 
-    {
-        counter++;
-        std::vector<uint8_t> events;
-        events.push_back(1); // dummy event
-        CEvents cEvent = CEvents(counter, gametxid, events);
-        mtx.vout.push_back(MakeCC1of2Vout('E',EVAL_CUSTOM, txfee, playerpk, gametxidpk, cEvent));
-        
-        bool signSucess = SignCCtx(mtx);
-        return(custom_rawtxresult(result,EncodeHexTx(mtx),0));
-    }
-    else 
-    {
-        // we failed to get any inputs make funding tx. 
-    }
-    return(result);
+    return result;
 }
 
-/*UniValue custom_func0(uint64_t txfee,struct CCcontract_info *cp,cJSON *params)
+UniValue custom_withdraw(uint64_t txfee,struct CCcontract_info *cp,cJSON *params)
 {
-    CPubKey gametxidpk, playerpk, pk; char gametxidaddr[64]={0}, coinaddr[64]={0}; uint256 gametxid;
-    std::vector<std::pair<CAddressUnspentKey, CAddressUnspentValue> > unspentOutputs; 
-    uint32_t counter;
-    gametxid = Parseuint256((char *)"a7e04fce4d71b6447281e2659dbed657d5c922e0cec02bdcb8115574f26509d5");
+    UniValue result(UniValue::VOBJ); CMutableTransaction mtx = CreateNewContextualCMutableTransaction(Params().GetConsensus(), komodo_nextheight()); std::string rawtx; int32_t broadcastflag=0;
     
-    playerpk = pubkey2pk(Mypubkey());
-    gametxidpk = CCtxidaddr(gametxidaddr,gametxid);
-    GetCCaddress(cp,gametxidaddr,gametxidpk);
-    
-    SetCCunspents(unspentOutputs, gametxidaddr, true);
-    fprintf(stderr, "unspendable address.%s \n",gametxidaddr);
-    std::map <int32_t,std::pair<uint256,size_t>> mUtxos;
-    for ( auto utxo : unspentOutputs )
-    {
-        //fprintf(stderr, "txid.%s vout.%li scriptpk.%s sats.%li blockht.%i\n", utxo.first.txhash.GetHex().c_str(),utxo.first.index, utxo.second.script.ToString().c_str(), utxo.second.satoshis, utxo.second.blockHeight);
-        CScript ccopret;
-        if ( getCCopret(utxo.second.script,ccopret) && custom_opretdecode(ccopret,pk,counter) == '1' )
-        {
-            fprintf(stderr, "counter.%i\n", counter);
-            mUtxos[counter] = std::make_pair(utxo.first.txhash,utxo.first.index);
-        }
-    }
-    for ( auto utxo : mUtxos )
-    {
-        fprintf(stderr, "counter.%i txid.%s vout.%li\n", utxo.first, utxo.second.first.GetHex().c_str(), utxo.second.second);
-    }
-    return 0;
-    
-    // does a spendable address! 
-    // get this working and figure out how to sign the tx with SignStepCC
-    //GetCCaddress1of2(cp,coinaddr,playerpk,gametxidpk);
+    return result;
 }
-
-// send yourself 1 coin to your CC address using normal utxo from your -pubkey
-
-UniValue custom_func1(uint64_t txfee,struct CCcontract_info *cp,cJSON *params)
-{
-    CPubKey gametxidpk, playerpk; char gametxidaddr[64]={0}, coinaddr[64]={0}; uint256 gametxid; CAmount totalin;
-    CMutableTransaction mtx = CreateNewContextualCMutableTransaction(Params().GetConsensus(), komodo_nextheight()); std::string rawtx;
-    gametxid = Parseuint256((char *)"a7e04fce4d71b6447281e2659dbed657d5c922e0cec02bdcb8115574f26509d5");
-    playerpk = pubkey2pk(Mypubkey());
-    gametxidpk = CCtxidaddr(gametxidaddr,gametxid);
-    GetCCaddress(cp,gametxidaddr,gametxidpk);
-    UniValue result(UniValue::VOBJ); CPubKey mypk; int64_t amount = CUSTOM_TXFEE; int32_t broadcastflag=1;
-    static int counter = 0;
-    if ( txfee == 0 )
-        txfee = CUSTOM_TXFEE;
-    mypk = pubkey2pk(Mypubkey());
-    if ( (totalin= AddNormalinputs(mtx,mypk,txfee*2,64)) >= txfee*2 ) // add utxo to mtx
-    {
-        // make op_return payload as normal. 
-        OLD SHIT lol
-        CScript opret = custom_opret('1',mypk,counter);
-        std::vector<std::vector<unsigned char>> vData = std::vector<std::vector<unsigned char>>();
-        if ( makeCCopret(opret, vData) )
-        {
-            // make vout0 with op_return included as payload.
-            mtx.vout.push_back(MakeCC1vout(cp->evalcode,amount,gametxidpk,&vData));
-            //fprintf(stderr, "vout size2.%li\n", mtx.vout.size());
-            rawtx = FinalizeCCTx(0,cp,mtx,mypk,txfee,CScript());
-            counter++;
-            return(custom_rawtxresult(result,rawtx,broadcastflag));
-        }
-        fprintf(stderr, "counter.%i\n", counter);
-        counter++;
-        std::vector<uint8_t> events;
-        events.push_back(1);
-        CEvents cEvent = CEvents(counter, gametxid, events);
-        mtx.vout.push_back(MakeCC1of2Vout(EVAL_CUSTOM, amount, mypk, gametxidpk, cEvent);
-        CAmount change = totalin - txfee*2;
-        mtx.vout.push_back(CTxOut(change, CScript() << ParseHex(HexStr(mypk)) << OP_CHECKSIG));
-        
-    }
-    return(result);
-} */
 
 bool custom_validate(struct CCcontract_info *cp,int32_t height,Eval *eval,const CTransaction tx)
 {

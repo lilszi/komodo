@@ -14,6 +14,7 @@
  */
  
 std::string MYCCLIBNAME = (char *)"customcc";
+#include "script/standard.h"
 
 #define EVAL_CUSTOM (EVAL_FAUCET2+1)
 #define CUSTOM_TXFEE 10000
@@ -21,20 +22,32 @@ std::string MYCCLIBNAME = (char *)"customcc";
 #define MYCCNAME "custom"
 
 #define RPC_FUNCS    \
-    { (char *)MYCCNAME, (char *)"func0", (char *)"<parameter help>", 1, 1, '0', EVAL_CUSTOM }, \
-    { (char *)MYCCNAME, (char *)"func1", (char *)"<no args>", 0, 0, '1', EVAL_CUSTOM },
+    { (char *)MYCCNAME, (char *)"create", (char *)"<name endtime>", 2, 2, 'C', EVAL_CUSTOM }, \
+    { (char *)MYCCNAME, (char *)"bet", (char *)"<amount>", 1, 1, 'B', EVAL_CUSTOM }, \
+    { (char *)MYCCNAME, (char *)"status", (char *)"<create_txid>", 1, 1, 'S', EVAL_CUSTOM }, \
+    { (char *)MYCCNAME, (char *)"withdraw", (char *)"<create_txid>", 1, 1, 'W', EVAL_CUSTOM }, \
+    { (char *)MYCCNAME, (char *)"list", (char *)"<[show complete]>", 0, 1, 'L', EVAL_CUSTOM },
 
 bool custom_validate(struct CCcontract_info *cp,int32_t height,Eval *eval,const CTransaction tx);
-UniValue custom_func0(uint64_t txfee,struct CCcontract_info *cp,cJSON *params);
-UniValue custom_func1(uint64_t txfee,struct CCcontract_info *cp,cJSON *params);
+UniValue custom_create(uint64_t txfee,struct CCcontract_info *cp,cJSON *params);
+UniValue custom_bet(uint64_t txfee,struct CCcontract_info *cp,cJSON *params);
+UniValue custom_status(uint64_t txfee,struct CCcontract_info *cp,cJSON *params);
+UniValue custom_withdraw(uint64_t txfee,struct CCcontract_info *cp,cJSON *params);
+UniValue custom_list(uint64_t txfee,struct CCcontract_info *cp,cJSON *params);
 
 #define CUSTOM_DISPATCH \
 if ( cp->evalcode == EVAL_CUSTOM ) \
 { \
-    if ( strcmp(method,"func0") == 0 ) \
-        return(custom_func0(txfee,cp,params)); \
-    else if ( strcmp(method,"func1") == 0 ) \
-        return(custom_func1(txfee,cp,params)); \
+    if ( strcmp(method,"create") == 0 ) \
+        return(custom_create(txfee,cp,params)); \
+    else if ( strcmp(method,"bet") == 0 ) \
+        return(custom_bet(txfee,cp,params)); \
+    else if ( strcmp(method,"status") == 0 ) \
+        return(custom_status(txfee,cp,params)); \
+    else if ( strcmp(method,"withdraw") == 0 ) \
+        return(custom_withdraw(txfee,cp,params)); \
+    else if ( strcmp(method,"list") == 0 ) \
+        return(custom_list(txfee,cp,params)); \
     else \
     { \
         result.push_back(Pair("result","error")); \
@@ -67,30 +80,46 @@ uint256 GetHash(SERIALIZABLE obj)
     return hw.GetHash();
 }
 
-class CGameCreate
+template <typename T>
+bool IsValidObject(const CScript &scr, T &extraObject)
+{
+    extraObject = T(scr);
+    return extraObject.IsValid();
+}
+/*
+    We have funcid in CC params and the object itself, because if someone changes the funcid/version in the cc opt params 
+    then the object will not be identified correctly and will serialize garbage data, and return as valid but wont be useable. 
+    By putting funcid last it will overflow and return invalid.
+*/
+class CCreate
 {
 public:
-    uint8_t nVersion = 1;
     std::string name = "";
-    CPubKey playerpk;
+    int64_t timestamp;
+    uint8_t funcid;
     
-    CGameCreate() {}
-    CGameCreate(const CTxOut &);
-    CGameCreate(std::string _name, CPubKey _playerpk) :
-        name(_name), playerpk(_playerpk) {}
+    CCreate() {}
+    CCreate(const CScript &);
+    CCreate(uint8_t _funcid, std::string _name, uint32_t _timestamp) :
+        funcid(_funcid), name(_name), timestamp(_timestamp) {}
     
     ADD_SERIALIZE_METHODS;
 
     template <typename Stream, typename Operation>
     inline void SerializationOp(Stream& s, Operation ser_action) {
-        READWRITE(nVersion);
         READWRITE(name);
-        READWRITE(playerpk);
+        READWRITE(timestamp);
+        READWRITE(funcid);
     }
 
     std::vector<unsigned char> AsVector()
     {
         return ::AsVector(*this);
+    }
+    
+    CCreate(const std::vector<unsigned char> &asVector)
+    {
+        FromVector(asVector, *this);
     }
 
     bool IsValid()
@@ -99,36 +128,76 @@ public:
     }
 };
 
-class CEvents
+class CBet
 {
 public:
-    uint8_t nVersion = 1;
-    uint32_t counter;
-    uint256 gametxid = zeroid;
-    std::vector<uint8_t> events;
+    uint256 createtxid = zeroid;
+    CAmount satoshis = 0;
+    CPubKey payoutpubkey;
+    uint8_t funcid;
     
-    CEvents() {}
-    CEvents(const CTxOut &);
-    CEvents(uint32_t _counter, uint256 _gametxid, std::vector<uint8_t> _events) :
-        counter(_counter), gametxid(_gametxid), events(_events) {}
+    CBet() {}
+    CBet(const CScript &);
+    CBet(uint8_t _funcid, uint256 _createtxid, CAmount _satoshis, CPubKey _payoutpubkey) :
+        funcid(_funcid), createtxid(_createtxid), satoshis(_satoshis), payoutpubkey(_payoutpubkey){}
     
     ADD_SERIALIZE_METHODS;
 
     template <typename Stream, typename Operation>
     inline void SerializationOp(Stream& s, Operation ser_action) {
-        READWRITE(nVersion);
-        READWRITE(counter);
-        READWRITE(gametxid);
-        READWRITE(events);
+        READWRITE(createtxid);
+        READWRITE(satoshis);
+        READWRITE(payoutpubkey);
+        READWRITE(funcid);
     }
 
     std::vector<unsigned char> AsVector()
     {
         return ::AsVector(*this);
     }
+    
+    CBet(const std::vector<unsigned char> &asVector)
+    {
+        FromVector(asVector, *this);
+    }
 
     bool IsValid()
     {
-        return gametxid != zeroid;
+        return createtxid != zeroid;
+    };
+};
+
+class CWithdraw
+{
+public:
+    uint256 createtxid = zeroid;
+    uint8_t funcid;
+    
+    CWithdraw() {}
+    CWithdraw(const CScript &);
+    CWithdraw(uint8_t _funcid, uint256 _createtxid) :
+        funcid(_funcid), createtxid(_createtxid) {}
+    
+    ADD_SERIALIZE_METHODS;
+
+    template <typename Stream, typename Operation>
+    inline void SerializationOp(Stream& s, Operation ser_action) {
+        READWRITE(createtxid);
+        READWRITE(funcid);
+    }
+
+    std::vector<unsigned char> AsVector()
+    {
+        return ::AsVector(*this);
+    }
+    
+    CWithdraw(const std::vector<unsigned char> &asVector)
+    {
+        FromVector(asVector, *this);
+    }
+
+    bool IsValid()
+    {
+        return createtxid != zeroid;
     };
 };
