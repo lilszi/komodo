@@ -358,11 +358,87 @@ UniValue custom_list(uint64_t txfee,struct CCcontract_info *cp,cJSON *params)
 UniValue custom_withdraw(uint64_t txfee,struct CCcontract_info *cp,cJSON *params)
 {
     UniValue result(UniValue::VOBJ); CMutableTransaction mtx = CreateNewContextualCMutableTransaction(Params().GetConsensus(), komodo_nextheight()); std::string rawtx; int32_t broadcastflag=0;
+    /* Payout transaction  
+    must determine if a result is possible using custom_hasResult function 
+    then construct a transaction paying the winner 
+    
+    max amount of ccvins possible all vins must be valid bet objects for this game
+    1 vout to the winning pubkey 
+    no other vouts allowed. 
+    
+    */
     
     return result;
 }
 
 bool custom_validate(struct CCcontract_info *cp,int32_t height,Eval *eval,const CTransaction tx)
 {
-    return true;
+    /* Validation
+    first loop vins check if only 1 create OR all bets 
+    if create, return false, cannot be spent 
+    if 1 bet, all others must be a bet
+
+    Bet Object must only be spent if a result is known. 
+        If a bet object vin is detected, all of the vins must also be valid bets from same game address. 
+        There must only be one vout, that pays the winning pubkey. 
+        if all this is met call the hasResult function. 
+        then make sure the only vout is paying the winning pubkey.
+    */
+    uint256 createtxid = zeroid; CScript gameScriptPub, testScriptPub;
+    CCreate GameObj; CBet BetObj; CPubKey winner; int64_t totalAmountBet;
+    
+    // Load the coins view to get the previous vouts fast!
+    CCoinsView dummy;
+    CCoinsViewCache view(&dummy);
+    CCoinsViewMemPool viewMemPool(pcoinsTip, mempool);
+    view.SetBackend(viewMemPool);
+    
+    // Check vins so we know what type of transaction this is, and verify that all vins are spending from the same game. 
+    for ( auto vin : tx.vin )
+    {
+        const CTxOut &prevout = view.GetOutputFor(vin);
+        if ( IsValidObject(prevout.scriptPubKey, GameObj) )
+        {
+            return(eval->Invalid("cannot spend create vout"));
+        }
+        else if ( IsValidObject(prevout.scriptPubKey, BetObj) && prevout.scriptPubKey.IsPayToCryptoCondition(&gameScriptPub) )
+        {
+            if ( createtxid == zeroid )
+            {
+                // first bet object seen, now all others must contain the same createtxid and reside in the same address. 
+                createtxid = BetObj.createtxid;
+                testScriptPub = gameScriptPub;
+            }
+            else if ( BetObj.createtxid != createtxid ) 
+                return(eval->Invalid("wrong createtxid"));
+            else if ( gameScriptPub != testScriptPub )
+                return(eval->Invalid("vin in wrong address"));
+        }
+        else 
+        {
+            return(eval->Invalid("invalid vin"));
+        }
+    }
+    
+    // Get the Game Object
+    CCoins createCoins; 
+    view.GetCoins(createtxid, createCoins);
+    if ( createCoins.vout.size() > 0 && IsValidObject(createCoins.vout[0].scriptPubKey, GameObj) )
+    {
+        // If there is a result get the wining pubkey.
+        if ( GameObj.timestamp < komodo_heightstamp(height) )
+            return(eval->Invalid("chain not past game timestamp"));
+        else if ( !custom_hasResult(cp, GameObj, createtxid, winner, totalAmountBet) )
+            return(eval->Invalid("game has no result yet"));
+    } else return(eval->Invalid("invalid game"));
+    
+    // We got this far so a winner needs to be paid. Check that it was! 
+    if ( tx.vout.size() != 1 )
+        return(eval->Invalid("does not pay 1 vout"));
+        
+    CPubKey testWinner (tx.vout[0].scriptPubKey.begin()+1, tx.vout[0].scriptPubKey.end()-1);
+    
+    if ( winner == testWinner )
+        return true;
+    return false;
 }
