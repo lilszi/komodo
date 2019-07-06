@@ -238,7 +238,7 @@ bool custom_hasResult(struct CCcontract_info *cp, const CCreate &GameObj, const 
     {
         if ( chainActive[i]->nTime < GameObj.timestamp )
             break; 
-    }
+    } /*
     if ( i == 0 ) 
         return false;
     i++; // block after the one found is first past the timestamp. 
@@ -249,10 +249,10 @@ bool custom_hasResult(struct CCcontract_info *cp, const CCreate &GameObj, const 
         return false;
     
     // Create the random number from this notarization.
-    memcpy(&x,&nota1.second.MoMoM ,sizeof(x)); 
+    memcpy(&x,&nota1.second.MoMoM ,sizeof(x)); */
     
-    //uint256 blockHash = *chainActive[i-20]->phashBlock;
-    //memcpy(&x,&blockHash ,sizeof(x)); 
+    uint256 blockHash = *chainActive[i-20]->phashBlock;
+    memcpy(&x,&blockHash ,sizeof(x)); 
     if ( x < 0 ) x = -x;
     
     // Sum all the pubkeys balances same as in status RPC. 
@@ -357,7 +357,6 @@ UniValue custom_list(uint64_t txfee,struct CCcontract_info *cp,cJSON *params)
 
 UniValue custom_withdraw(uint64_t txfee,struct CCcontract_info *cp,cJSON *params)
 {
-    UniValue result(UniValue::VOBJ); CMutableTransaction mtx = CreateNewContextualCMutableTransaction(Params().GetConsensus(), komodo_nextheight()); std::string rawtx; int32_t broadcastflag=0;
     /* Payout transaction  
     must determine if a result is possible using custom_hasResult function 
     then construct a transaction paying the winner 
@@ -367,7 +366,65 @@ UniValue custom_withdraw(uint64_t txfee,struct CCcontract_info *cp,cJSON *params
     no other vouts allowed. 
     
     */
+    UniValue result(UniValue::VOBJ); uint256 createtxid = zeroid, hashBlock; CTransaction createtx; CPubKey txidpk, winner, ccpubkey; char gameaddr[64]; CAmount totalAmountBet, totalWithdrawn=0;
+    CMutableTransaction mtx = CreateNewContextualCMutableTransaction(Params().GetConsensus(), komodo_nextheight()); std::string rawtx; int32_t broadcastflag=0, numberVins=0, maxVins;
+    std::vector<std::pair<CAddressUnspentKey, CAddressUnspentValue> > unspentOutputs; 
+    if ( txfee == 0 )
+        txfee = CUSTOM_TXFEE;
     
+    if ( params != 0 && cJSON_GetArraySize(params) == 1 )
+    {
+        createtxid = juint256(jitem(params,0));        
+        // Allow temporary specification of amount of vins to use, so we can find the limit of vins. 
+        maxVins = jint(jitem(params,1),0);
+        if ( createtxid != zeroid && myGetTransaction(createtxid, createtx, hashBlock) != 0 )
+        {
+            CCreate GameObj; COptCCParams ccp;
+            if ( createtx.vout.size() > 0 && IsPayToCryptoCondition(createtx.vout[0].scriptPubKey, ccp, GameObj) && GameObj.IsValid() )
+            {
+                // check for result and winner 
+                if ( GameObj.timestamp > komodo_heightstamp(chainActive.Height()) && custom_hasResult(cp, GameObj, createtxid, winner, totalAmountBet) )
+                {
+                    // add inputs until we reach the maximum possible amount of inputs. 
+                    txidpk = CCtxidaddr(gameaddr,createtxid);
+                    ccpubkey = GetUnspendable(cp,0);
+                    GetCCaddress1of2(cp,gameaddr,txidpk,ccpubkey);
+                    SetCCunspents(unspentOutputs,gameaddr,true);
+                    for ( auto utxo : unspentOutputs )
+                    {
+                        //fprintf(stderr, "txid.%s vout.%li scriptpk.%s sats.%li blockht.%i\n", utxo.first.txhash.GetHex().c_str(),utxo.first.index, utxo.second.script.ToString().c_str(), utxo.second.satoshis, utxo.second.blockHeight);
+                        CBet BetObj;
+                        if ( IsValidObject(utxo.second.script, BetObj) && BetObj.satoshis == utxo.second.satoshis && BetObj.createtxid == createtxid )
+                        {
+                            // we know this utxo is in the right address and it contains the correct size satoshies value so add it as vin. 
+                            mtx.vin.push_back(CTxIn(utxo.first.txhash, utxo.first.index));
+                            numberVins++;
+                            totalWithdrawn += utxo.second.satoshis;
+                        }
+                        // stop adding vins once max is reached. We should test this and find the maximum number before the tx fails to send, validation will handle any number. 
+                        if ( numberVins == maxVins ) 
+                            break; 
+                        // Make sure the vout wont be oversized, this may need to be less than this not sure, have to test also. 
+                        if ( KOMODO_VALUETOOBIG(totalAmountBet) != 0 )
+                        {
+                            totalWithdrawn -= utxo.second.satoshis;
+                            mtx.vin.pop_back();
+                            break;
+                        }
+                    }
+                    if ( mtx.vin.size() > 0 )
+                    {
+                        // all vins are added, constuct single vout to winner 
+                        mtx.vout.push_back(CTxOut(totalWithdrawn-txfee,CScript() << ParseHex(HexStr(winner)) << OP_CHECKSIG));
+                        // sign the tx and send it. 
+                        if ( SignCCtx(mtx) )
+                            return(custom_rawtxresult(result,EncodeHexTx(mtx),broadcastflag));
+                        else return(cclib_error(result,"signing error"));
+                    } else return(cclib_error(result,"no vins found"));
+                } else return(cclib_error(result,"this game has no result yet"));
+            } else return(cclib_error(result,"createtxid is not valid"));
+        } else return(cclib_error(result,"createtxid not found"));
+    } else return(cclib_error(result,"not enough parameters"));
     return result;
 }
 
