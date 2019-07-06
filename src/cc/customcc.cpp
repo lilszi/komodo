@@ -383,7 +383,7 @@ UniValue custom_withdraw(uint64_t txfee,struct CCcontract_info *cp,cJSON *params
             if ( createtx.vout.size() > 0 && IsPayToCryptoCondition(createtx.vout[0].scriptPubKey, ccp, GameObj) && GameObj.IsValid() )
             {
                 // check for result and winner 
-                if ( GameObj.timestamp > komodo_heightstamp(chainActive.Height()) && custom_hasResult(cp, GameObj, createtxid, winner, totalAmountBet) )
+                if ( GameObj.timestamp < komodo_heightstamp(chainActive.Height()) && custom_hasResult(cp, GameObj, createtxid, winner, totalAmountBet) )
                 {
                     // add inputs until we reach the maximum possible amount of inputs. 
                     txidpk = CCtxidaddr(gameaddr,createtxid);
@@ -393,7 +393,7 @@ UniValue custom_withdraw(uint64_t txfee,struct CCcontract_info *cp,cJSON *params
                     for ( auto utxo : unspentOutputs )
                     {
                         //fprintf(stderr, "txid.%s vout.%li scriptpk.%s sats.%li blockht.%i\n", utxo.first.txhash.GetHex().c_str(),utxo.first.index, utxo.second.script.ToString().c_str(), utxo.second.satoshis, utxo.second.blockHeight);
-                        CBet BetObj;
+                        CBet BetObj; CWithdraw withdrawObj;
                         if ( IsValidObject(utxo.second.script, BetObj) && BetObj.satoshis == utxo.second.satoshis && BetObj.createtxid == createtxid )
                         {
                             // we know this utxo is in the right address and it contains the correct size satoshies value so add it as vin. 
@@ -410,6 +410,14 @@ UniValue custom_withdraw(uint64_t txfee,struct CCcontract_info *cp,cJSON *params
                             totalWithdrawn -= utxo.second.satoshis;
                             mtx.vin.pop_back();
                             break;
+                        }
+                        // check for a valid withdraw object, if one exists we need to pass send it back to the game address. 
+                        if ( IsValidObject(utxo.second.script, withdrawObj) )
+                        {
+                            // if withdraw exists, we need to validate its not a fake vout. 
+                            // to do this, we need to fetch the tx from disk that sent it, and make sure it is in a tx that contains only valid bet object vins. 
+                            // once we know this, we can simply pass this object to a new vout in this transaction 
+                            // each withdraw transaction after this only needs to check that the tx it came from contained the exact same withdraw object. 
                         }
                     }
                     if ( mtx.vin.size() > 0 )
@@ -440,6 +448,11 @@ bool custom_validate(struct CCcontract_info *cp,int32_t height,Eval *eval,const 
         There must only be one vout, that pays the winning pubkey. 
         if all this is met call the hasResult function. 
         then make sure the only vout is paying the winning pubkey.
+        
+    changes to use withdraw object
+        first withdraw uses the hasResult function, compares the withdraw object matches 
+        each withdraw after this needs to simply check the previous tx contains this withdraw object and that nobody tampered with it. 
+        we can just hash the object and compare the hash for speed. 
     */
     uint256 createtxid = zeroid; CScript gameScriptPub, testScriptPub;
     CCreate GameObj; CBet BetObj; CPubKey winner; int64_t totalAmountBet;
