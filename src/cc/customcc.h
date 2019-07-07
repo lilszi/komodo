@@ -1,18 +1,18 @@
 /*
  to create a custom libcc.so:
- 
+
  1. change "func0" and "func1" to method names that fit your custom cc. Of course, you can create more functions by adding another entry to RPC_FUNCS. there is not any practical limit to the number of methods.
- 
+
  2. For each method make sure there is a UniValue function declaration and CUSTOM_DISPATCH has an if statement checking for it that calls the custom_func
- 
+
  3. write the actual custom_func0, custom_func1 and custom_validate in customcc.cpp
- 
+
  4. ./makecustom, which builds cclib.cpp with -DBUILD_CUSTOMCC and puts the libcc.so in ~/komodo/src and rebuilds komodod
- 
+
  5. launch your chain with -ac_cclib=customcc -ac_cc=2
- 
+
  */
- 
+
 std::string MYCCLIBNAME = (char *)"customcc";
 #include "script/standard.h"
 
@@ -87,8 +87,8 @@ bool IsValidObject(const CScript &scr, T &extraObject)
     return extraObject.IsValid();
 }
 /*
-    We have funcid in CC params and the object itself, because if someone changes the funcid/version in the cc opt params 
-    then the object will not be identified correctly and will serialize garbage data, and return as valid but wont be useable. 
+    We have funcid in CC params and the object itself, because if someone changes the funcid/version in the cc opt params
+    then the object will not be identified correctly and will serialize garbage data, and return as valid but wont be useable.
     By putting funcid last it will overflow and return invalid.
 */
 class CCreate
@@ -97,12 +97,12 @@ public:
     std::string name = "";
     int64_t timestamp;
     uint8_t funcid;
-    
+
     CCreate() {}
     CCreate(const CScript &);
     CCreate(uint8_t _funcid, std::string _name, uint32_t _timestamp) :
         funcid(_funcid), name(_name), timestamp(_timestamp) {}
-    
+
     ADD_SERIALIZE_METHODS;
 
     template <typename Stream, typename Operation>
@@ -116,7 +116,7 @@ public:
     {
         return ::AsVector(*this);
     }
-    
+
     CCreate(const std::vector<unsigned char> &asVector)
     {
         FromVector(asVector, *this);
@@ -135,12 +135,12 @@ public:
     CAmount satoshis = 0;
     CPubKey payoutpubkey;
     uint8_t funcid;
-    
+
     CBet() {}
     CBet(const CScript &);
     CBet(uint8_t _funcid, uint256 _createtxid, CAmount _satoshis, CPubKey _payoutpubkey) :
         funcid(_funcid), createtxid(_createtxid), satoshis(_satoshis), payoutpubkey(_payoutpubkey){}
-    
+
     ADD_SERIALIZE_METHODS;
 
     template <typename Stream, typename Operation>
@@ -155,7 +155,7 @@ public:
     {
         return ::AsVector(*this);
     }
-    
+
     CBet(const std::vector<unsigned char> &asVector)
     {
         FromVector(asVector, *this);
@@ -172,17 +172,19 @@ class CWithdraw
 public:
     uint256 createtxid = zeroid;
     uint8_t funcid;
-    
+    CPubKey winner;
+
     CWithdraw() {}
     CWithdraw(const CScript &);
-    CWithdraw(uint8_t _funcid, uint256 _createtxid) :
-        funcid(_funcid), createtxid(_createtxid) {}
-    
+    CWithdraw(uint8_t _funcid, uint256 _createtxid, CPubKey _winner) :
+        funcid(_funcid), createtxid(_createtxid), winner(_winner) {}
+
     ADD_SERIALIZE_METHODS;
 
     template <typename Stream, typename Operation>
     inline void SerializationOp(Stream& s, Operation ser_action) {
         READWRITE(createtxid);
+        READWRITE(winner);
         READWRITE(funcid);
     }
 
@@ -190,7 +192,7 @@ public:
     {
         return ::AsVector(*this);
     }
-    
+
     CWithdraw(const std::vector<unsigned char> &asVector)
     {
         FromVector(asVector, *this);
