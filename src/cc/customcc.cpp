@@ -205,7 +205,9 @@ int64_t custom_GetBets(struct CCcontract_info *cp, const uint256 &createtxid, co
     for ( auto utxo : unspentOutputs )
     {
         //fprintf(stderr, "txid.%s vout.%li scriptpk.%s sats.%li blockht.%i\n", utxo.first.txhash.GetHex().c_str(),utxo.first.index, utxo.second.script.ToString().c_str(), utxo.second.satoshis, utxo.second.blockHeight);
-        CBet BetObj;
+        CBet BetObj; CWithdraw withdrawObj;
+        // Check for a withdraw object first, and break the loop if found and valid. So that we dont return a false result.
+
         if ( IsValidObject(utxo.second.script, BetObj) && BetObj.satoshis == utxo.second.satoshis )
         {
             //fprintf(stderr, "createtxid.%s sats.%li pubkey.%s funcid.%i\n", BetObj.createtxid.GetHex().c_str(), BetObj.satoshis, HexStr(BetObj.payoutpubkey).c_str(), BetObj.funcid);
@@ -228,6 +230,46 @@ int64_t custom_GetBets(struct CCcontract_info *cp, const uint256 &createtxid, co
     return total;
 }
 
+bool custom_hasWithdrawObject(struct CCcontract_info *cp, const uint256 &createtxid, CPubKey &winner)
+{
+    char gameaddr[64]; CPubKey txidpk, ccpubkey; std::vector<std::pair<CAddressUnspentKey, CAddressUnspentValue> > unspentOutputs; bool fSeenWithdraw = false; uint256 hashBlock;
+    txidpk = CCtxidaddr(gameaddr,createtxid);
+    ccpubkey = GetUnspendable(cp,0);
+    GetCCaddress1of2(cp,gameaddr,txidpk,ccpubkey);
+    SetCCunspents(unspentOutputs,gameaddr,true);
+    for ( auto utxo : unspentOutputs )
+    {
+        //fprintf(stderr, "txid.%s vout.%li scriptpk.%s sats.%li blockht.%i\n", utxo.first.txhash.GetHex().c_str(),utxo.first.index, utxo.second.script.ToString().c_str(), utxo.second.satoshis, utxo.second.blockHeight);
+        CWithdraw withdrawObj; CWithdraw vinwithdrawObj;
+        if ( IsValidObject(utxo.second.script, withdrawObj) && withdrawObj.createtxid == createtxid )
+        {
+            CTransaction withdrawtx;
+            if ( myGetTransaction(utxo.first.txhash, withdrawtx, hashBlock) != 0 )
+            {
+                for ( auto vin : withdrawtx.vin )
+                {
+                    CTransaction vintx; CBet vinBetObj;
+                    if ( myGetTransaction(vin.prevout.hash, vintx, hashBlock) != 0 )
+                    {
+                        // check the tx has only bets and up to 1 withdraw
+                        if ( IsValidObject(vintx.vout[vin.prevout.n].scriptPubKey, vinwithdrawObj) && vinwithdrawObj.createtxid == createtxid )
+                        {
+                            if ( !fSeenWithdraw )
+                                fSeenWithdraw = true; 
+                            else return false;
+                        }
+                        else if ( !IsValidObject(vintx.vout[vin.prevout.n].scriptPubKey, vinBetObj) || vinBetObj.createtxid != createtxid )
+                            return false;
+                    } else return false;
+                }
+            }
+            winner = withdrawObj.winner;
+            return true;
+        }
+    }
+    return false;
+}
+
 bool custom_hasResult(struct CCcontract_info *cp, const CCreate &GameObj, const uint256 &createtxid, CPubKey &winner, CAmount &totalAmountBet)
 {
     std::string symbol; Notarisation nota1, nota2; std::map <CPubKey, CAmount> mPubKeyAmounts; int64_t secondsleft; int32_t totalPubKeys; CAmount total;
@@ -239,6 +281,7 @@ bool custom_hasResult(struct CCcontract_info *cp, const CCreate &GameObj, const 
         if ( chainActive[i]->nTime < GameObj.timestamp )
             break;
     } /*
+    // TODO: check the heights of the found noarizations, to make sure they are not confirned out of order.
     if ( i == 0 )
         return false;
     i++; // block after the one found is first past the timestamp.
@@ -285,7 +328,7 @@ bool custom_hasResult(struct CCcontract_info *cp, const CCreate &GameObj, const 
 
 UniValue custom_status(uint64_t txfee,struct CCcontract_info *cp,cJSON *params)
 {
-    UniValue result(UniValue::VOBJ); UniValue pubkeys(UniValue::VARR); uint256 createtxid = zeroid, hashBlock; CTransaction createtx; CPubKey winner;
+    UniValue result(UniValue::VOBJ); UniValue pubkeys(UniValue::VARR); uint256 createtxid = zeroid, hashBlock; CTransaction createtx; CPubKey winner; bool fHasWithdraw;
     CAmount total, totalAmountBet; int64_t secondsleft;
     std::map <CPubKey, CAmount> mPubKeyAmounts; int32_t totalPubKeys = 0;
     if ( params != 0 && cJSON_GetArraySize(params) == 1 )
@@ -296,33 +339,35 @@ UniValue custom_status(uint64_t txfee,struct CCcontract_info *cp,cJSON *params)
             CCreate GameObj; COptCCParams ccp;
             if ( createtx.vout.size() > 0 && IsPayToCryptoCondition(createtx.vout[0].scriptPubKey, ccp, GameObj) && GameObj.IsValid() )
             {
+                fHasWithdraw = custom_hasWithdrawObject(cp, createtxid, winner);
                 if ( (total= custom_GetBets(cp, createtxid, GameObj, mPubKeyAmounts, secondsleft, totalPubKeys)) != 0 )
                 {
-                    for ( auto element : mPubKeyAmounts )
+                    if ( !fHasWithdraw )
                     {
-                        UniValue pubkeyobj(UniValue::VOBJ);
-                        pubkeyobj.push_back(Pair(HexStr(element.first), element.second));
-                        pubkeys.push_back(pubkeyobj);
-                    }
-                    result.push_back(Pair("pubkeys",pubkeys));
-                    result.push_back(Pair("total_funds", total));
-                    result.push_back(Pair("total_pubkeys", totalPubKeys));
-                    result.push_back(Pair("end_time", GameObj.timestamp));
-                    if ( secondsleft > 0 )
-                        result.push_back(Pair("seconds_left", secondsleft));
+                        for ( auto element : mPubKeyAmounts )
+                        {
+                            UniValue pubkeyobj(UniValue::VOBJ);
+                            pubkeyobj.push_back(Pair(HexStr(element.first), element.second));
+                            pubkeys.push_back(pubkeyobj);
+                        }
+                        result.push_back(Pair("pubkeys",pubkeys));
+                        result.push_back(Pair("total_pubkeys", totalPubKeys));
+                        result.push_back(Pair("end_time", GameObj.timestamp));
+                        if ( secondsleft > 0 )
+                            result.push_back(Pair("seconds_left", secondsleft));
+                    } 
+                    result.push_back(Pair("total_funds_remaining", total));
                 }
                 if ( secondsleft < 0 )
                 {
-                    if ( custom_hasResult(cp, GameObj, createtxid, winner, totalAmountBet) )
+                    if ( fHasWithdraw )
+                        result.push_back(Pair("winner", HexStr(winner)));
+                    else if ( custom_hasResult(cp, GameObj, createtxid, winner, totalAmountBet) )
                     {
                         result.push_back(Pair("winner", HexStr(winner)));
                         result.push_back(Pair("total_amount_bet", totalAmountBet));
-                        result.push_back(Pair("claimed", total == 0 ? "true" : "false"));
                     }
-                    else
-                    {
-                        result.push_back("Waiting for next notarized MoMoM hash...");
-                    }
+                    else result.push_back("Waiting for next notarized MoMoM hash...");
                 }
             } else return(cclib_error(result,"createtxid is not valid"));
         } else return(cclib_error(result,"createtxid not found"));
@@ -358,13 +403,12 @@ UniValue custom_list(uint64_t txfee,struct CCcontract_info *cp,cJSON *params)
 UniValue custom_withdraw(uint64_t txfee,struct CCcontract_info *cp,cJSON *params)
 {
     /* Payout transaction
-    must determine if a result is possible using custom_hasResult function
+    must determine if a result is possible using custom_hasResult function or a previous withdraw object
     then construct a transaction paying the winner
 
     max amount of ccvins possible all vins must be valid bet objects for this game
+    1 vout to game address with withdraw object.
     1 vout to the winning pubkey
-    no other vouts allowed.
-
     */
     UniValue result(UniValue::VOBJ); uint256 createtxid = zeroid, hashBlock; CTransaction createtx; CPubKey txidpk, winner, ccpubkey; char gameaddr[64]; CAmount totalAmountBet, totalWithdrawn=0;
     CMutableTransaction mtx = CreateNewContextualCMutableTransaction(Params().GetConsensus(), komodo_nextheight()); std::string rawtx; int32_t broadcastflag=0, numberVins=0, maxVins;
@@ -471,9 +515,7 @@ bool custom_validate(struct CCcontract_info *cp,int32_t height,Eval *eval,const 
 
     Bet Object must only be spent if a result is known.
         If a bet object vin is detected, all of the vins must also be valid bets from same game address.
-        There must only be one vout, that pays the winning pubkey.
-        if all this is met call the hasResult function.
-        then make sure the only vout is paying the winning pubkey.
+        There must only be one vout, that pays the winning pubkey and one vout to the gameaddress containing the withdraw object.
 
     changes to use withdraw object
         first withdraw uses the hasResult function, compares the withdraw object contains the correct winner.
@@ -566,5 +608,5 @@ bool custom_validate(struct CCcontract_info *cp,int32_t height,Eval *eval,const 
     CPubKey testWinner (tx.vout[1].scriptPubKey.begin()+1, tx.vout[1].scriptPubKey.end()-1);
     if ( winner == testWinner )
         return true;
-     else return(eval->Invalid("pays wrong pubkey"));
+    else return(eval->Invalid("pays wrong pubkey"));
 }
