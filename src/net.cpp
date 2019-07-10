@@ -80,6 +80,7 @@ namespace {
 extern uint16_t ASSETCHAINS_P2PPORT;
 extern int8_t is_STAKED(const char *chain_name);
 extern char ASSETCHAINS_SYMBOL[65];
+extern std::vector<CDNSSeedData> vAlternateSeeds;
 
 bool fDiscover = true;
 bool fListen = true;
@@ -1291,7 +1292,11 @@ void ThreadDNSAddressSeed()
         }
     }
 
-    const vector<CDNSSeedData> &vSeeds = Params().DNSSeeds();
+    std::vector<CDNSSeedData> vSeeds;
+    if ( vAlternateSeeds.empty() )
+        vSeeds = Params().DNSSeeds();
+    else 
+        vSeeds = vAlternateSeeds;
     int found = 0;
 
     LogPrintf("Loading addresses from DNS seeds (could take a while)\n");

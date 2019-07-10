@@ -116,6 +116,7 @@ CScript KOMODO_EARLYTXID_SCRIPTPUB;
 int32_t ASSETCHAINS_EARLYTXIDCONTRACT;
 
 std::map <std::int8_t, int32_t> mapHeightEvalActivate;
+std::vector<CDNSSeedData> vAlternateSeeds;
 
 struct komodo_kv *KOMODO_KV;
 pthread_mutex_t KOMODO_KV_mutex,KOMODO_CC_mutex;

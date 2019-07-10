@@ -1707,6 +1707,12 @@ void komodo_args(char *argv0)
     NOTARY_PUBKEY = GetArg("-pubkey", "");
     KOMODO_DEALERNODE = GetArg("-dealer",0);
     KOMODO_TESTNODE = GetArg("-testnode",0);
+    std::vector<std::string> vDNSSeeds = mapMultiArgs["-dnsseed"];
+    if ( !vDNSSeeds.empty() )
+    {
+        for ( auto dnsseed : vDNSSeeds )
+            vAlternateSeeds.push_back(CDNSSeedData(dnsseed, dnsseed));
+    }
     if ( strlen(NOTARY_PUBKEY.c_str()) == 66 )
     {
         decode_hex(NOTARY_PUBKEY33,33,(char *)NOTARY_PUBKEY.c_str());
