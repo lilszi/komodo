@@ -452,7 +452,7 @@ UniValue custom_status(uint64_t txfee,struct CCcontract_info *cp,cJSON *params)
                         for ( auto element : mPubKeyAmounts )
                         {
                             UniValue pubkeyobj(UniValue::VOBJ);
-                            pubkeyobj.push_back(Pair(HexStr(element.first), element.second));
+                            pubkeyobj.push_back(Pair(HexStr(element.first), ValueFromAmount(element.second)));
                             pubkeys.push_back(pubkeyobj);
                         }
                         result.push_back(Pair("pubkeys",pubkeys));
@@ -461,8 +461,8 @@ UniValue custom_status(uint64_t txfee,struct CCcontract_info *cp,cJSON *params)
                         if ( secondsleft > 0 )
                             result.push_back(Pair("seconds_left", secondsleft));
                     } 
-                    result.push_back(Pair("total_funds_remaining", total));
                 }
+                result.push_back(Pair("total_funds_remaining", ValueFromAmount(total)));
                 if ( secondsleft < 0 )
                 {
                     if ( fHasWithdraw )
