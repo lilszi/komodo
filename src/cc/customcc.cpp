@@ -6,6 +6,87 @@
   *
   *
   *  ported by blackjok3r
+  
+  start chain
+  ./komodod -ac_name=TESTL1 -ac_reward=7777777777 -ac_cc=777 -ac_cclib=customcc -testnode=1 -gen -genproclimit=1 
+  
+  do litunstpent and extract a pubkey and restart daemon with it after mining a block
+  020399854fa1516bd39415ff51984bc8a2212973c2881d5e98aa0a71b1bdaf8cd6
+  
+  create a game
+  ./komodo-cli -ac_name=TESTL1 cclib create 17 '["lotto2",1562831600]'
+    fe1ad336a600d9d98e5378ed8d958f193c82e158197bc36c07af2fceb865d6bf
+  
+  check game status
+  ./komodo-cli -ac_name=TESTL1 cclib status 17 '["fe1ad336a600d9d98e5378ed8d958f193c82e158197bc36c07af2fceb865d6bf"]'
+    {
+    "valid_game": "yes"
+    }
+
+  make some bets
+  ./komodo-cli -ac_name=TESTL1 cclib bet 17 '["fe1ad336a600d9d98e5378ed8d958f193c82e158197bc36c07af2fceb865d6bf", 8]' x3
+
+  getnewaddress, validateaddress and restart with new pubkey, then make some bets. repeat. 
+  0200d426998780a4e48d38a0d852766e19c1bde358ac2706df3ee5da4173f5c815
+  ./komodo-cli -ac_name=TESTL1 cclib bet 17 '["fe1ad336a600d9d98e5378ed8d958f193c82e158197bc36c07af2fceb865d6bf", 1]' x5
+  
+  02b0e9d843fcfabb048007739f2f04418cef353fe3571c845f46a4988d4482e138
+  ./komodo-cli -ac_name=TESTL1 cclib bet 17 '["fe1ad336a600d9d98e5378ed8d958f193c82e158197bc36c07af2fceb865d6bf", 10]' x1
+  
+  036af5d3e8cc7b52c11499290e5ccc2282d5d62afa9560e55d5ddf1cc1aab5048f
+  ./komodo-cli -ac_name=TESTL1 cclib bet 17 '["fe1ad336a600d9d98e5378ed8d958f193c82e158197bc36c07af2fceb865d6bf", 3]' x2
+  
+  get the status (this is after the timestamp has past, and a resuult is known. Status RPC will tell you if the game is over or not, and the winner if one is known.)
+  ./komodo-cli -ac_name=TESTL1 cclib status 17 '["fe1ad336a600d9d98e5378ed8d958f193c82e158197bc36c07af2fceb865d6bf"]'
+      {
+          "valid_game": "yes",
+          "pubkeys": [
+            {
+              "0200d426998780a4e48d38a0d852766e19c1bde358ac2706df3ee5da4173f5c815": 500000000
+            },
+            {
+              "020399854fa1516bd39415ff51984bc8a2212973c2881d5e98aa0a71b1bdaf8cd6": 2400000000
+            },
+            {
+              "02b0e9d843fcfabb048007739f2f04418cef353fe3571c845f46a4988d4482e138": 1000000000
+            },
+            {
+              "036af5d3e8cc7b52c11499290e5ccc2282d5d62afa9560e55d5ddf1cc1aab5048f": 600000000
+            }
+          ],
+          "total_pubkeys": 4,
+          "end_time": 1562831600,
+          "total_funds_remaining": 4500000000,
+          "winner": "02b0e9d843fcfabb048007739f2f04418cef353fe3571c845f46a4988d4482e138",
+          "total_amount_bet": 1000000000
+      }
+
+**********************************************************
+For the following, the number of utxos to withdraw is a cli argument, we need to find the maximum about a tx can heve before it will refuse to send. 
+Should be trivial, make a game and spam thousands of bets to it (even from same pubkey) then start a very high number to withdraw decreasing until it sends. I will then hard code the maximum vins. 
+I also added check for single vout exeeding 10 billion coins. I would like to check this also, but it means a lotto game needs to have ONLY 11 or 12 bets of 1 billion in size to test. 
+With these massive mumbers the math to calculate the winner will possibly overflow, but as its all divides and no multiplies it may be ok. We can change to big num if large numbers are breaking it. 
+**********************************************************
+
+  withdraw 1 utxo for winner (currently anyone can do this, not sure if we need to limit to the winner can spend only or not. Alright please give input on this.)
+  ./komodo-cli -ac_name=TESTL1 cclib withdraw 17 '["fe1ad336a600d9d98e5378ed8d958f193c82e158197bc36c07af2fceb865d6bf",1]'
+    Check this transaction, it has only 1 vin, that is a bet object. maybe try to add more vins to it, fake withdraw object or something 
+    
+  withdraw a second utxo 
+   ./komodo-cli -ac_name=TESTL1 cclib withdraw 17 '["fe1ad336a600d9d98e5378ed8d958f193c82e158197bc36c07af2fceb865d6bf",1]'
+    Check this transaction, it should have the withdraw vout created in the above tx as vin and as vout 0. I have tested this multiple times seems to  fails valdiation with malformed tx.
+
+  withdraw 5 utxos: 
+    ./komodo-cli -ac_name=TESTL1 cclib withdraw 17 '["fe1ad336a600d9d98e5378ed8d958f193c82e158197bc36c07af2fceb865d6bf",5]'
+        Decode this transaction, it has 5 bet utxos and 1 withdraw. You can keep making these withdraw txns until there are no bet utxos left. 
+  Check status again to see how much funds are left to claim for the winner: 
+  
+  ./komodo-cli -ac_name=TESTL1 cclib status 17 '["fe1ad336a600d9d98e5378ed8d958f193c82e158197bc36c07af2fceb865d6bf"]'
+    {
+        "valid_game": "yes",
+        "total_funds_remaining": 2200000000,
+        "winner": "02b0e9d843fcfabb048007739f2f04418cef353fe3571c845f46a4988d4482e138"
+    }
   */
 
  template <typename TOBJ>
@@ -46,10 +127,18 @@ CCreate::CCreate(const CScript &scriptPubKey)
 {
     COptCCParams p;
     // Get info from opt params
-    // version acts as funcid
+    // version acts as funcid for now... may not be needed, or may need to make new variable for funcid
     if (IsPayToCryptoCondition(scriptPubKey, p) && p.IsValid() && p.evalCode == EVAL_CUSTOM && p.version == 'C')
     {
-        FromVector(p.vData[0], *this);
+        try 
+        {
+            FromVector(p.vData[0], *this);
+        }
+        catch(const std::exception& e)
+        {
+            // failed to create it. return invalid
+            name = "";
+        }
         if ( this->funcid != 'C' )
         {
             // funcid mismatch set name to 0, to invalidate this object.
@@ -64,7 +153,15 @@ CBet::CBet(const CScript &scriptPubKey)
     // Get info from opt params
     if (IsPayToCryptoCondition(scriptPubKey, p) && p.IsValid() && p.evalCode == EVAL_CUSTOM && p.version == 'B')
     {
-        FromVector(p.vData[0], *this);
+        try 
+        {
+            FromVector(p.vData[0], *this);
+        }
+        catch(const std::exception& e)
+        {
+            // failed to create it. return invalid
+            createtxid = zeroid;
+        }
         if ( this->funcid != 'B' )
         {
             // funcid mismatch invalidate this object.
@@ -79,7 +176,15 @@ CWithdraw::CWithdraw(const CScript &scriptPubKey)
     // Get info from opt params
     if (IsPayToCryptoCondition(scriptPubKey, p) && p.IsValid() && p.evalCode == EVAL_CUSTOM && p.version == 'W')
     {
-        FromVector(p.vData[0], *this);
+        try 
+        {
+            FromVector(p.vData[0], *this);
+        }
+        catch(const std::exception& e)
+        {
+            // failed to create it. return invalid
+            createtxid = zeroid;
+        }
         if ( this->funcid != 'W' )
         {
             // funcid mismatch invalidate this object.
@@ -129,7 +234,7 @@ UniValue custom_create(uint64_t txfee,struct CCcontract_info *cp,cJSON *params)
             return(cclib_error(result,"name cannot be empty"));
         }
         timestamp = juint(jitem(params,1),0);
-        if ( timestamp < komodo_heightstamp(chainActive.Height()+ASSETCHAINS_BLOCKTIME*20) )
+        if ( timestamp < time(NULL)+ASSETCHAINS_BLOCKTIME*20 )
         {
             fprintf(stderr, "now.%li vs timestamp.%li now+25blocks.%li\n", time(NULL), timestamp, (time(NULL)+ASSETCHAINS_BLOCKTIME*25));
             return(cclib_error(result,"finish time must be at least 20 blocks in the future."));
@@ -165,7 +270,7 @@ UniValue custom_bet(uint64_t txfee,struct CCcontract_info *cp,cJSON *params)
     {
         createtxid = juint256(jitem(params,0));
         amount = jdouble(jitem(params,1),0)*COIN + 0.0000000049;
-        if ( amount < 0 )
+        if ( amount <= 0 )
             return(cclib_error(result,"amount cannot be zero"));
         if ( createtxid != zeroid && myGetTransaction(createtxid, createtx, hashBlock) != 0 )
         {
@@ -174,12 +279,11 @@ UniValue custom_bet(uint64_t txfee,struct CCcontract_info *cp,cJSON *params)
             {
                 if ( GameObj.timestamp > komodo_heightstamp(chainActive.Height()) )
                 {
-                    // we will need a refund path, for bets that are confirmed after the result is known
                     if ( (total= AddNormalinputs(mtx,mypk,amount+txfee,64)) >= amount+txfee )
                     {
                         uint8_t funcid = 'B';
                         txidpk = CCtxidaddr(gameaddr,createtxid);
-                        CBet BetObj = CBet(funcid, createtxid, amount, mypk);
+                        CBet BetObj = CBet(funcid, createtxid, mypk);
                         mtx.vout.push_back(MakeCC1of2Vout(funcid, EVAL_CUSTOM, amount, txidpk, GetUnspendable(cp,0), BetObj));
                         CAmount change = total - amount - txfee;
                         mtx.vout.push_back(CTxOut(change,CScript() << ParseHex(HexStr(mypk)) << OP_CHECKSIG));
@@ -208,21 +312,21 @@ int64_t custom_GetBets(struct CCcontract_info *cp, const uint256 &createtxid, co
         CBet BetObj; CWithdraw withdrawObj;
         // Check for a withdraw object first, and break the loop if found and valid. So that we dont return a false result.
 
-        if ( IsValidObject(utxo.second.script, BetObj) && BetObj.satoshis == utxo.second.satoshis )
+        if ( IsValidObject(utxo.second.script, BetObj) )
         {
-            //fprintf(stderr, "createtxid.%s sats.%li pubkey.%s funcid.%i\n", BetObj.createtxid.GetHex().c_str(), BetObj.satoshis, HexStr(BetObj.payoutpubkey).c_str(), BetObj.funcid);
+            //fprintf(stderr, "createtxid.%s sats.%li pubkey.%s funcid.%i\n", BetObj.createtxid.GetHex().c_str(), utxo.second.satoshis, HexStr(BetObj.payoutpubkey).c_str(), BetObj.funcid);
             pubkey = BetObj.payoutpubkey;
             std::map <CPubKey, CAmount>::iterator pos = mPubKeyAmounts.find(pubkey);
             if ( pos == mPubKeyAmounts.end() )
             {
                 // insert new address + utxo amount
-                mPubKeyAmounts[pubkey] = BetObj.satoshis;
+                mPubKeyAmounts[pubkey] = utxo.second.satoshis;
                 totalPubKeys++;
             }
             else
             {
                 // update unspent tally for this address
-                mPubKeyAmounts[pubkey] += BetObj.satoshis;
+                mPubKeyAmounts[pubkey] += utxo.second.satoshis;
             }
             total += utxo.second.satoshis;
         }
@@ -262,7 +366,7 @@ bool custom_hasWithdrawObject(struct CCcontract_info *cp, const uint256 &createt
                             return false;
                     } else return false;
                 }
-            }
+            } else return false;
             winner = withdrawObj.winner;
             return true;
         }
@@ -339,6 +443,7 @@ UniValue custom_status(uint64_t txfee,struct CCcontract_info *cp,cJSON *params)
             CCreate GameObj; COptCCParams ccp;
             if ( createtx.vout.size() > 0 && IsPayToCryptoCondition(createtx.vout[0].scriptPubKey, ccp, GameObj) && GameObj.IsValid() )
             {
+                result.push_back(Pair("valid_game","yes"));
                 fHasWithdraw = custom_hasWithdrawObject(cp, createtxid, winner);
                 if ( (total= custom_GetBets(cp, createtxid, GameObj, mPubKeyAmounts, secondsleft, totalPubKeys)) != 0 )
                 {
@@ -406,17 +511,19 @@ UniValue custom_withdraw(uint64_t txfee,struct CCcontract_info *cp,cJSON *params
     must determine if a result is possible using custom_hasResult function or a previous withdraw object
     then construct a transaction paying the winner
 
-    max amount of ccvins possible all vins must be valid bet objects for this game
+    max amount of ccvins possible all vins must be valid bet/withdraw objects for this game
+    all bet vins for first tx, then must contain maximum 1 withdraw vin and all bet vins, no other vins. 
     1 vout to game address with withdraw object.
     1 vout to the winning pubkey
     */
     UniValue result(UniValue::VOBJ); uint256 createtxid = zeroid, hashBlock; CTransaction createtx; CPubKey txidpk, winner, ccpubkey; char gameaddr[64]; CAmount totalAmountBet, totalWithdrawn=0;
     CMutableTransaction mtx = CreateNewContextualCMutableTransaction(Params().GetConsensus(), komodo_nextheight()); std::string rawtx; int32_t broadcastflag=0, numberVins=0, maxVins;
-    std::vector<std::pair<CAddressUnspentKey, CAddressUnspentValue> > unspentOutputs; CWithdraw withdrawObj;
+    std::vector<std::pair<CAddressUnspentKey, CAddressUnspentValue> > unspentOutputs; CWithdraw withdrawObj; 
+    uint256 withdrawtxid; int32_t withdrawvout;
     if ( txfee == 0 )
         txfee = CUSTOM_TXFEE;
-
-    if ( params != 0 && cJSON_GetArraySize(params) == 1 )
+    
+    if ( params != 0 && cJSON_GetArraySize(params) == 2 )
     {
         createtxid = juint256(jitem(params,0));
         // Allow temporary specification of amount of vins to use, so we can find the limit of vins.
@@ -441,25 +548,35 @@ UniValue custom_withdraw(uint64_t txfee,struct CCcontract_info *cp,cJSON *params
                         if ( IsValidObject(utxo.second.script, tempWithdrawObj) && tempWithdrawObj.createtxid == createtxid )
                         {
                             // if withdraw exists, we need to validate its not a fake vout.
-                            // to do this, we need to fetch the tx from disk that sent it, and make sure it is in a tx that contains only valid bet object vins.
+                            // to do this, we need to fetch the tx from disk that sent it, and make sure it is in a tx that contains only valid bet object vins, for first tx. 
+                            // OR for any withdraw after the first, must contain 1 withdraw vin and the rest bets. 
                             // this means it has passed validation and the winner is known.
                             // once we know this, we can simply pass this object to a new vout in this transaction
                             CTransaction withdrawtx;
                             if ( myGetTransaction(utxo.first.txhash, withdrawtx, hashBlock) != 0 )
                             {
+                                int32_t bets = 0, withdraws = 0;
                                 for ( auto vin : withdrawtx.vin )
                                 {
-                                    CTransaction vintx; CBet vinBetObj;
+                                    CTransaction vintx; CBet vinBetObj; CWithdraw vinwithdrawObj; 
                                     if ( myGetTransaction(vin.prevout.hash, vintx, hashBlock) != 0 )
                                     {
-                                        if ( !IsValidObject(vintx.vout[vin.prevout.n].scriptPubKey, vinBetObj) || vinBetObj.createtxid != createtxid )
-                                            return(cclib_error(result,"invalid withdraw transaction"));
+                                        if ( IsValidObject(vintx.vout[vin.prevout.n].scriptPubKey, vinBetObj) && vinBetObj.createtxid == createtxid )
+                                            bets++;
+                                        else if ( IsValidObject(vintx.vout[vin.prevout.n].scriptPubKey, vinwithdrawObj) && vinwithdrawObj.createtxid == createtxid )
+                                            withdraws++;
                                     } else return(cclib_error(result,"could not fetch vintx"));
                                 }
-                                withdrawObj = tempWithdrawObj;
-                            }
+                                //fprintf(stderr, "withdraws.%i bets.%i withdrawtx.vin.size.%li\n", withdraws, bets, withdrawtx.vin.size());
+                                if ( (withdraws == 1 && bets == withdrawtx.vin.size()-1) || (withdraws == 0 && bets == withdrawtx.vin.size()) )
+                                {
+                                    withdrawObj = tempWithdrawObj;
+                                    withdrawtxid = utxo.first.txhash; 
+                                    withdrawvout = utxo.first.index;
+                                } else return(cclib_error(result,"invalid withdraw tx"));
+                            } else return(cclib_error(result,"could not fetch withdrawtx"));
                         }
-                        if ( IsValidObject(utxo.second.script, BetObj) && BetObj.satoshis == utxo.second.satoshis && BetObj.createtxid == createtxid )
+                        if ( IsValidObject(utxo.second.script, BetObj) && BetObj.createtxid == createtxid )
                         {
                             // we know this utxo is in the right address and it contains the correct size satoshies value so add it as vin.
                             // stop adding vins once max is reached. We should test this and find the maximum number before the tx fails to send, validation will handle any number.
@@ -477,6 +594,7 @@ UniValue custom_withdraw(uint64_t txfee,struct CCcontract_info *cp,cJSON *params
                         if ( withdrawObj.IsValid() )
                         {
                             // we have a valid withdraw object from a previous withdraw so send it back to the address.
+                            mtx.vin.push_back(CTxIn(withdrawtxid, withdrawvout));
                             mtx.vout.push_back(MakeCC1of2Vout('W', EVAL_CUSTOM, txfee, txidpk, ccpubkey, withdrawObj));
                             winner = withdrawObj.winner;
                         }
@@ -511,19 +629,17 @@ bool custom_validate(struct CCcontract_info *cp,int32_t height,Eval *eval,const 
     /* Validation
     first loop vins check if only 1 create OR all bets
     if create, return false, cannot be spent
-    if 1 bet, all others must be a bet
+    if 1 bet, all others must be a bet, there can be only one withdraw if one exists.
 
     Bet Object must only be spent if a result is known.
-        If a bet object vin is detected, all of the vins must also be valid bets from same game address.
+        If a bet object vin is detected, all of the vins must also be valid bet/withdraw from same game address.
         There must only be one vout, that pays the winning pubkey and one vout to the gameaddress containing the withdraw object.
-
-    changes to use withdraw object
         first withdraw uses the hasResult function, compares the withdraw object contains the correct winner.
         hash the withdraw object from vin, and the withdraw object from vout, to verify withdraw obj is correct.
+    
     */
     uint256 createtxid = zeroid, withdrawHash = zeroid; CScript gameScriptPub, testScriptPub;
     CCreate GameObj; CBet BetObj; CWithdraw withdrawObj; CPubKey winner; int64_t totalAmountBet;
-
     // Load the coins view to get the previous vouts fast!
     CCoinsView dummy;
     CCoinsViewCache view(&dummy);
@@ -532,7 +648,7 @@ bool custom_validate(struct CCcontract_info *cp,int32_t height,Eval *eval,const 
 
     if ( tx.vout.size() != 2 )
         return(eval->Invalid("wrong number of vouts"));
-
+    
     if ( !IsValidObject(tx.vout[0].scriptPubKey, withdrawObj) )
         return(eval->Invalid("invalid withdraw object"));
 
@@ -541,9 +657,7 @@ bool custom_validate(struct CCcontract_info *cp,int32_t height,Eval *eval,const 
     {
         const CTxOut &prevout = view.GetOutputFor(vin);
         if ( IsValidObject(prevout.scriptPubKey, GameObj) )
-        {
             return(eval->Invalid("cannot spend create vout"));
-        }
         else if ( IsValidObject(prevout.scriptPubKey, BetObj) && prevout.scriptPubKey.IsPayToCryptoCondition(&gameScriptPub) )
         {
             if ( createtxid == zeroid )
@@ -570,13 +684,8 @@ bool custom_validate(struct CCcontract_info *cp,int32_t height,Eval *eval,const 
             if ( withdrawHash != zeroid )
                 return(eval->Invalid("cannot have more than 1 withdraw vout"));
             withdrawHash = GetHash(withdrawObj);
-        }
-        else
-        {
-            return(eval->Invalid("invalid vin"));
-        }
+        } else return(eval->Invalid("invalid vin"));
     }
-
     // Get the Game Object
     CCoins createCoins;
     view.GetCoins(createtxid, createCoins);
@@ -587,7 +696,19 @@ bool custom_validate(struct CCcontract_info *cp,int32_t height,Eval *eval,const 
             return(eval->Invalid("chain not past game timestamp"));
         if ( withdrawHash == zeroid )
         {
-            // There is no withdraw object vin, so we need to validate the withdraw object in vouts is valid.
+            // need to check that there are no spents in the address first!
+            std::vector<std::pair<CAddressIndexKey, CAmount> > addressIndex;
+            char gameaddr[64];
+            CPubKey txidpk = CCtxidaddr(gameaddr,createtxid);
+            GetCCaddress1of2(cp,gameaddr,txidpk,GetUnspendable(cp,0));
+            SetCCtxids(addressIndex, gameaddr, true);
+            for ( auto maybeSpent : addressIndex )
+            {
+                //fprintf(stderr, "txid.%s vout.%li sats.%li blockHeight.%i\n",maybeSpent.first.txhash.GetHex().c_str(), maybeSpent.first.index, maybeSpent.second, maybeSpent.first.blockHeight);
+                if ( maybeSpent.second < 0 )
+                    return(eval->Invalid("already been a withdraw"));
+            }
+            // There is no withdraw object vin and nothing has been spent, so we need to validate the withdraw object in vouts contains the correct winner.
             if ( !custom_hasResult(cp, GameObj, createtxid, winner, totalAmountBet) )
                 return(eval->Invalid("game has no result yet"));
             else if ( withdrawObj.createtxid != createtxid )
@@ -603,7 +724,7 @@ bool custom_validate(struct CCcontract_info *cp,int32_t height,Eval *eval,const 
             winner = withdrawObj.winner;
         }
     } else return(eval->Invalid("invalid game"));
-
+    
     // We got this far so a winner needs to be paid. Check that it was!
     CPubKey testWinner (tx.vout[1].scriptPubKey.begin()+1, tx.vout[1].scriptPubKey.end()-1);
     if ( winner == testWinner )

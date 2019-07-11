@@ -132,21 +132,19 @@ class CBet
 {
 public:
     uint256 createtxid = zeroid;
-    CAmount satoshis = 0;
     CPubKey payoutpubkey;
     uint8_t funcid;
 
     CBet() {}
     CBet(const CScript &);
-    CBet(uint8_t _funcid, uint256 _createtxid, CAmount _satoshis, CPubKey _payoutpubkey) :
-        funcid(_funcid), createtxid(_createtxid), satoshis(_satoshis), payoutpubkey(_payoutpubkey){}
+    CBet(uint8_t _funcid, uint256 _createtxid, CPubKey _payoutpubkey) :
+        funcid(_funcid), createtxid(_createtxid), payoutpubkey(_payoutpubkey){}
 
     ADD_SERIALIZE_METHODS;
 
     template <typename Stream, typename Operation>
     inline void SerializationOp(Stream& s, Operation ser_action) {
         READWRITE(createtxid);
-        READWRITE(satoshis);
         READWRITE(payoutpubkey);
         READWRITE(funcid);
     }
