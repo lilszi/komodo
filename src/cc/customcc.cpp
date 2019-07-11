@@ -312,6 +312,8 @@ int64_t custom_GetBets(struct CCcontract_info *cp, const uint256 &createtxid, co
         CBet BetObj; CWithdraw withdrawObj;
         // Check for a withdraw object first, and break the loop if found and valid. So that we dont return a false result.
 
+        // TODO, use utxo.second.blockHeight to prevent tx sent after the timestamp has past from being valid bets. 
+        // Make another function to do the reverse, so any bets sent after the time can be refunded to the supplied pubkey. 
         if ( IsValidObject(utxo.second.script, BetObj) )
         {
             //fprintf(stderr, "createtxid.%s sats.%li pubkey.%s funcid.%i\n", BetObj.createtxid.GetHex().c_str(), utxo.second.satoshis, HexStr(BetObj.payoutpubkey).c_str(), BetObj.funcid);
@@ -407,6 +409,7 @@ bool custom_hasResult(struct CCcontract_info *cp, const CCreate &GameObj, const 
         return false;
 
     // Cacluate the odds from the amounts bet
+    // TODO: convert this to big num. 
     int64_t bestChance = std::numeric_limits<int64_t>::max();
     for ( auto element : mPubKeyAmounts )
     {
@@ -443,7 +446,7 @@ UniValue custom_status(uint64_t txfee,struct CCcontract_info *cp,cJSON *params)
             CCreate GameObj; COptCCParams ccp;
             if ( createtx.vout.size() > 0 && IsPayToCryptoCondition(createtx.vout[0].scriptPubKey, ccp, GameObj) && GameObj.IsValid() )
             {
-                result.push_back(Pair("valid_game","yes"));
+                result.push_back(Pair("name",GameObj.name));
                 fHasWithdraw = custom_hasWithdrawObject(cp, createtxid, winner);
                 if ( (total= custom_GetBets(cp, createtxid, GameObj, mPubKeyAmounts, secondsleft, totalPubKeys)) != 0 )
                 {
@@ -457,11 +460,11 @@ UniValue custom_status(uint64_t txfee,struct CCcontract_info *cp,cJSON *params)
                         }
                         result.push_back(Pair("pubkeys",pubkeys));
                         result.push_back(Pair("total_pubkeys", totalPubKeys));
-                        result.push_back(Pair("end_time", GameObj.timestamp));
                         if ( secondsleft > 0 )
                             result.push_back(Pair("seconds_left", secondsleft));
                     } 
                 }
+                result.push_back(Pair("end_time", GameObj.timestamp));
                 result.push_back(Pair("total_funds_remaining", ValueFromAmount(total)));
                 if ( secondsleft < 0 )
                 {
