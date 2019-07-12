@@ -230,9 +230,9 @@ UniValue custom_create(uint64_t txfee,struct CCcontract_info *cp,cJSON *params)
     {
         name.assign(jstr(jitem(params,0),0));
         if ( name.empty() )
-        {
             return(cclib_error(result,"name cannot be empty"));
-        }
+        else if ( name.length() > 128 )
+            return(cclib_error(result,"maximum name length 128 char"));
         timestamp = juint(jitem(params,1),0);
         if ( timestamp < time(NULL)+ASSETCHAINS_BLOCKTIME*20 )
         {
@@ -314,7 +314,8 @@ int64_t custom_GetBets(struct CCcontract_info *cp, const uint256 &createtxid, co
 
         // TODO, use utxo.second.blockHeight to prevent tx sent after the timestamp has past from being valid bets. 
         // Make another function to do the reverse, so any bets sent after the time can be refunded to the supplied pubkey. 
-        if ( IsValidObject(utxo.second.script, BetObj) )
+        // need to enforce bets are above zero otherwise result will crash with division by 0. 
+        if ( IsValidObject(utxo.second.script, BetObj) && utxo.second.satoshis > 0 )
         {
             //fprintf(stderr, "createtxid.%s sats.%li pubkey.%s funcid.%i\n", BetObj.createtxid.GetHex().c_str(), utxo.second.satoshis, HexStr(BetObj.payoutpubkey).c_str(), BetObj.funcid);
             pubkey = BetObj.payoutpubkey;
@@ -386,12 +387,12 @@ bool custom_hasResult(struct CCcontract_info *cp, const CCreate &GameObj, const 
     {
         if ( chainActive[i]->nTime < GameObj.timestamp )
             break;
-    } /*
+    } 
     // TODO: check the heights of the found noarizations, to make sure they are not confirned out of order.
     if ( i == 0 )
         return false;
     i++; // block after the one found is first past the timestamp.
-    if ( (n= ScanNotarisationsDBForwards(i, symbol, 1440, nota1)) == 0 )
+    /*if ( (n= ScanNotarisationsDBForwards(i, symbol, 1440, nota1)) == 0 )
         return false;
     // found first notarizaton after the timestamp, keep scanning forwards for the next one.
     if ( ScanNotarisationsDBForwards(n+1, symbol, 1440, nota2) == 0 )
@@ -400,6 +401,11 @@ bool custom_hasResult(struct CCcontract_info *cp, const CCreate &GameObj, const 
     // Create the random number from this notarization.
     memcpy(&x,&nota1.second.MoMoM ,sizeof(x)); */
 
+    if ( chainActive.Height()-20 < 1 )
+    {
+        fprintf(stderr, "result block is not in the chain.\n");
+        return false;
+    }
     uint256 blockHash = *chainActive[i-20]->phashBlock;
     memcpy(&x,&blockHash ,sizeof(x));
     if ( x < 0 ) x = -x;
@@ -415,11 +421,16 @@ bool custom_hasResult(struct CCcontract_info *cp, const CCreate &GameObj, const 
     {
         memcpy(&y,&element.first,sizeof(y));
         if ( y < 0 ) y = -y;
-        //fprintf(stderr, "y.%li vs x.%li\n",y,x);
+        fprintf(stderr, "y.%li vs x.%li\n",y,x);
         int64_t chance = x - y;
         if ( chance < 0 ) chance = -chance;
-        //fprintf(stderr, "chance.%li vs rndnumber.%li amountbet.%li\n",chance, x, element.second);
+        fprintf(stderr, "chance.%li vs rndnumber.%li amountbet.%li\n",chance, x, element.second);
         int64_t weight = (element.second * 100) / total;
+        if ( weight == 0 ) 
+        {
+            fprintf(stderr, "zero weight for pubkey %s setting to weight of 1\n", HexStr(element.first).c_str());
+            weight = 1;
+        }
         int64_t adjustedchance = chance / weight;
         fprintf(stderr, "weight.%li adjusted chance.%li\n", weight, adjustedchance);
         if ( adjustedchance < bestChance )
