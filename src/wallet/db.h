@@ -33,7 +33,7 @@
 
 #include <boost/filesystem/path.hpp>
 
-#ifdef BUILD_ROGUE
+#ifdef BUILD_CUSTOMCC
     #ifdef __APPLE__
         #include "../depends/x86_64-apple-darwin18.6.0/include/db_cxx.h"
     #elif defined(_WIN32)
@@ -41,7 +41,15 @@
     #else
         #include "../depends/x86_64-unknown-linux-gnu/include/db_cxx.h"
     #endif
-#else
+#elif BUILD_ROGUE
+    #ifdef __APPLE__
+        #include "../depends/x86_64-apple-darwin18.6.0/include/db_cxx.h"
+    #elif defined(_WIN32)
+        #include "../depends/x86_64-w64-mingw32/include/db_cxx.h"
+    #else
+        #include "../depends/x86_64-unknown-linux-gnu/include/db_cxx.h"
+    #endif
+#else 
     #include <db_cxx.h>
 #endif
 
