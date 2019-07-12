@@ -270,8 +270,8 @@ UniValue custom_bet(uint64_t txfee,struct CCcontract_info *cp,cJSON *params)
     {
         createtxid = juint256(jitem(params,0));
         amount = jdouble(jitem(params,1),0)*COIN + 0.0000000049;
-        if ( amount <= 0 )
-            return(cclib_error(result,"amount cannot be zero"));
+        if ( amount < MINIMUM_BET )
+            return(cclib_error(result,"minimum bet 50000 sat"));
         if ( createtxid != zeroid && myGetTransaction(createtxid, createtx, hashBlock) != 0 )
         {
             CCreate GameObj; COptCCParams ccp;
@@ -314,8 +314,8 @@ int64_t custom_GetBets(struct CCcontract_info *cp, const uint256 &createtxid, co
 
         // TODO, use utxo.second.blockHeight to prevent tx sent after the timestamp has past from being valid bets. 
         // Make another function to do the reverse, so any bets sent after the time can be refunded to the supplied pubkey. 
-        // need to enforce bets are above zero otherwise result will crash with division by 0. 
-        if ( IsValidObject(utxo.second.script, BetObj) && utxo.second.satoshis > 0 )
+        // need to enforce bets are above 50,000 sat, to cover txfees in withdraw.
+        if ( IsValidObject(utxo.second.script, BetObj) && utxo.second.satoshis >= MINIMUM_BET  )
         {
             //fprintf(stderr, "createtxid.%s sats.%li pubkey.%s funcid.%i\n", BetObj.createtxid.GetHex().c_str(), utxo.second.satoshis, HexStr(BetObj.payoutpubkey).c_str(), BetObj.funcid);
             pubkey = BetObj.payoutpubkey;
@@ -590,7 +590,7 @@ UniValue custom_withdraw(uint64_t txfee,struct CCcontract_info *cp,cJSON *params
                                 } else return(cclib_error(result,"invalid withdraw tx"));
                             } else return(cclib_error(result,"could not fetch withdrawtx"));
                         }
-                        if ( IsValidObject(utxo.second.script, BetObj) && BetObj.createtxid == createtxid )
+                        if ( IsValidObject(utxo.second.script, BetObj) && BetObj.createtxid == createtxid && utxo.second.satoshis >= MINIMUM_BET )
                         {
                             // we know this utxo is in the right address and it contains the correct size satoshies value so add it as vin.
                             // stop adding vins once max is reached. We should test this and find the maximum number before the tx fails to send, validation will handle any number.

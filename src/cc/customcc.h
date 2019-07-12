@@ -18,6 +18,7 @@ std::string MYCCLIBNAME = (char *)"customcc";
 
 #define EVAL_CUSTOM (EVAL_FAUCET2+1)
 #define CUSTOM_TXFEE 10000
+#define MINIMUM_BET 50000
 
 #define MYCCNAME "custom"
 
