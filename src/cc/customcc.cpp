@@ -221,7 +221,7 @@ UniValue custom_create(uint64_t txfee,struct CCcontract_info *cp,cJSON *params)
     */
     CMutableTransaction mtx = CreateNewContextualCMutableTransaction(Params().GetConsensus(), komodo_nextheight()); std::string rawtx;
     CPubKey mypk = pubkey2pk(Mypubkey());
-    std::string name; int32_t n; int64_t timestamp; CAmount total;
+    std::string name; int32_t n; uint32_t timestamp; CAmount total;
     UniValue result(UniValue::VOBJ); int32_t broadcastflag=1;
     if ( txfee == 0 )
         txfee = CUSTOM_TXFEE;
@@ -234,15 +234,15 @@ UniValue custom_create(uint64_t txfee,struct CCcontract_info *cp,cJSON *params)
         else if ( name.length() > 128 )
             return(cclib_error(result,"maximum name length 128 char"));
         timestamp = juint(jitem(params,1),0);
-        if ( timestamp < time(NULL)+ASSETCHAINS_BLOCKTIME*20 )
+        if ( timestamp < komodo_heightstamp(chainActive.Height())+ASSETCHAINS_BLOCKTIME*20 )
         {
-            fprintf(stderr, "now.%li vs timestamp.%li now+25blocks.%li\n", time(NULL), timestamp, (time(NULL)+ASSETCHAINS_BLOCKTIME*25));
+            fprintf(stderr, "now.%u vs timestamp.%u now+25blocks.%u\n", komodo_heightstamp(chainActive.Height()), timestamp, (komodo_heightstamp(chainActive.Height())+ASSETCHAINS_BLOCKTIME*25));
             return(cclib_error(result,"finish time must be at least 20 blocks in the future."));
         }
         if ( (total= AddNormalinputs(mtx,mypk,txfee*2,64)) >= txfee*2 ) // add utxo to mtx
         {
             uint8_t funcid = 'C';
-            CCreate GameObj = CCreate(funcid, name, timestamp);
+            CCreate GameObj = CCreate(funcid, name, (int64_t)timestamp);
             mtx.vout.push_back(MakeCC1of1Vout(funcid,cp->evalcode,txfee,GetUnspendable(cp,0),GameObj));
             CAmount change = total - 2*txfee;
             mtx.vout.push_back(CTxOut(change,CScript() << ParseHex(HexStr(mypk)) << OP_CHECKSIG));
