@@ -315,7 +315,7 @@ int64_t custom_GetBets(struct CCcontract_info *cp, const uint256 &createtxid, co
         // TODO, use utxo.second.blockHeight to prevent tx sent after the timestamp has past from being valid bets. 
         // Make another function to do the reverse, so any bets sent after the time can be refunded to the supplied pubkey. 
         // need to enforce bets are above 50,000 sat, to cover txfees in withdraw.
-        if ( IsValidObject(utxo.second.script, BetObj) && utxo.second.satoshis >= MINIMUM_BET  )
+        if ( IsValidObject(utxo.second.script, BetObj) && utxo.second.satoshis >= MINIMUM_BET )
         {
             //fprintf(stderr, "createtxid.%s sats.%li pubkey.%s funcid.%i\n", BetObj.createtxid.GetHex().c_str(), utxo.second.satoshis, HexStr(BetObj.payoutpubkey).c_str(), BetObj.funcid);
             pubkey = BetObj.payoutpubkey;
@@ -653,12 +653,17 @@ bool custom_validate(struct CCcontract_info *cp,int32_t height,Eval *eval,const 
     
     */
     uint256 createtxid = zeroid, withdrawHash = zeroid; CScript gameScriptPub, testScriptPub;
-    CCreate GameObj; CBet BetObj; CWithdraw withdrawObj; CPubKey winner; int64_t totalAmountBet;
+    CCreate GameObj; CBet BetObj; CWithdraw withdrawObj; CPubKey winner; int64_t totalAmountBet; int64_t interest;
     // Load the coins view to get the previous vouts fast!
     CCoinsView dummy;
     CCoinsViewCache view(&dummy);
     CCoinsViewMemPool viewMemPool(pcoinsTip, mempool);
     view.SetBackend(viewMemPool);
+    
+    // Check txfee is not too large or miner can change the withdraw tx to pay themself the winnings. 
+    // To allow for a variable txfee the withdraw must be changed to have a marker vin from the winner pubkey allowing only the winner to spend the coins. 
+    if ( height > 1777 && view.GetValueIn(height,&interest,tx,komodo_heightstamp(height)) - tx.GetValueOut() > CUSTOM_TXFEE )
+        return(eval->Invalid("txfee too big"));
 
     if ( tx.vout.size() != 2 )
         return(eval->Invalid("wrong number of vouts"));
