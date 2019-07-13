@@ -531,7 +531,7 @@ UniValue custom_withdraw(uint64_t txfee,struct CCcontract_info *cp,cJSON *params
     1 vout to the winning pubkey
     */
     UniValue result(UniValue::VOBJ); uint256 createtxid = zeroid, hashBlock; CTransaction createtx; CPubKey txidpk, winner, ccpubkey; char gameaddr[64]; CAmount totalAmountBet, totalWithdrawn=0;
-    CMutableTransaction mtx = CreateNewContextualCMutableTransaction(Params().GetConsensus(), komodo_nextheight()); std::string rawtx; int32_t broadcastflag=0, numberVins=0, maxVins;
+    CMutableTransaction mtx = CreateNewContextualCMutableTransaction(Params().GetConsensus(), komodo_nextheight()); std::string rawtx; int32_t broadcastflag=1, numberVins=0, maxVins;
     std::vector<std::pair<CAddressUnspentKey, CAddressUnspentValue> > unspentOutputs; CWithdraw withdrawObj; 
     uint256 withdrawtxid; int32_t withdrawvout;
     if ( txfee == 0 )
@@ -625,7 +625,7 @@ UniValue custom_withdraw(uint64_t txfee,struct CCcontract_info *cp,cJSON *params
                             else return(cclib_error(result,"there is no result yet"));
                         }
                         // add the payout vout
-                        mtx.vout.push_back(CTxOut(totalWithdrawn-txfee*2,CScript() << ParseHex(HexStr(winner)) << OP_CHECKSIG));
+                        mtx.vout.push_back(CTxOut(totalWithdrawn-txfee,CScript() << ParseHex(HexStr(winner)) << OP_CHECKSIG));
                         // sign the tx and send it.
                         if ( SignCCtx(mtx) )
                             return(custom_rawtxresult(result,EncodeHexTx(mtx),broadcastflag));
@@ -662,6 +662,7 @@ bool custom_validate(struct CCcontract_info *cp,int32_t height,Eval *eval,const 
     
     // Check txfee is not too large or miner can change the withdraw tx to pay themself the winnings. 
     // To allow for a variable txfee the withdraw must be changed to have a marker vin from the winner pubkey allowing only the winner to spend the coins. 
+    //fprintf(stderr, "value in % li vs 10,000\n",view.GetValueIn(height,&interest,tx,komodo_heightstamp(height)) - tx.GetValueOut() );
     if ( height > 1777 && view.GetValueIn(height,&interest,tx,komodo_heightstamp(height)) - tx.GetValueOut() > CUSTOM_TXFEE )
         return(eval->Invalid("txfee too big"));
 
