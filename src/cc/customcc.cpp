@@ -652,6 +652,10 @@ bool custom_validate(struct CCcontract_info *cp,int32_t height,Eval *eval,const 
         hash the withdraw object from vin, and the withdraw object from vout, to verify withdraw obj is correct.
     
     */
+    // Seems to call this for every vin in the tx, so save the hash after validating it once. 
+    static uint256 validated = zeroid;
+    if ( validated == tx.GetHash() )
+        return true;
     uint256 createtxid = zeroid, withdrawHash = zeroid; CScript gameScriptPub, testScriptPub;
     CCreate GameObj; CBet BetObj; CWithdraw withdrawObj; CPubKey winner; int64_t totalAmountBet; int64_t interest;
     // Load the coins view to get the previous vouts fast!
@@ -748,6 +752,8 @@ bool custom_validate(struct CCcontract_info *cp,int32_t height,Eval *eval,const 
     // We got this far so a winner needs to be paid. Check that it was!
     CPubKey testWinner (tx.vout[1].scriptPubKey.begin()+1, tx.vout[1].scriptPubKey.end()-1);
     if ( winner == testWinner )
+    {
+        validated = tx.GetHash();
         return true;
-    else return(eval->Invalid("pays wrong pubkey"));
+    } else return(eval->Invalid("pays wrong pubkey"));
 }

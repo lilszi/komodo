@@ -428,12 +428,19 @@ bool priv2addr(char *coinaddr,uint8_t *buf33,uint8_t priv32[32])
 std::vector<uint8_t> Mypubkey()
 {
     extern uint8_t NOTARY_PUBKEY33[33];
+    CReserveKey reservekey(pwalletMain);
+    CPubKey pubkey1;
+    CKeyPool keypool;
+    int64_t nIndex = 0;
+    pwalletMain->ReserveKeyFromKeyPool(nIndex, keypool);
+    pubkey1 = keypool.vchPubKey;
     std::vector<uint8_t> pubkey; int32_t i; uint8_t *dest,*pubkey33;
     pubkey33 = NOTARY_PUBKEY33;
     pubkey.resize(33);
-    dest = pubkey.data();
+    //dest = pubkey1.data();
+    fprintf(stderr, "pubkey.%s\n", HexStr(pubkey1).c_str());
     for (i=0; i<33; i++)
-        dest[i] = pubkey33[i];
+        pubkey[i] = pubkey1[i];
     return(pubkey);
 }
 
