@@ -136,10 +136,6 @@ int ScanNotarisationsDB(int height, std::string symbol, int scanLimitBlocks, Not
     return 0;
 }
 
-/*
- * Scan notarisationsdb forwards for blocks containing a notarisation
- * for given symbol. Return height of matched notarisation or 0.
- */
 int ScanNotarisationsDBForwards(int height, std::string symbol, int scanLimitBlocks, Notarisation& out)
 {
     if (height < 0 || height > chainActive.Height())
@@ -158,6 +154,33 @@ int ScanNotarisationsDBForwards(int height, std::string symbol, int scanLimitBlo
             if (strcmp(nota.second.symbol, symbol.data()) == 0) {
                 out = nota;
                 return height+i;
+            }
+        }
+    }
+    return 0;
+}
+
+int ScanNotarisationsDB2(int height, std::string symbol, int scanLimitBlocks, Notarisation& out)
+{
+    int32_t i,maxheight,ht;
+    maxheight = chainActive.Height();
+    if ( height < 0 || height > maxheight )
+        return false;
+    for (i=0; i<scanLimitBlocks; i++)
+    {
+        ht = height+i;
+        if ( ht > maxheight )
+            break;
+        NotarisationsInBlock notarisations;
+        uint256 blockHash = *chainActive[ht]->phashBlock;
+        if ( !GetBlockNotarisations(blockHash,notarisations) )
+            continue;
+        BOOST_FOREACH(Notarisation& nota,notarisations)
+        {
+            if ( strcmp(nota.second.symbol,symbol.data()) == 0 )
+            {
+                out = nota;
+                return(ht);
             }
         }
     }

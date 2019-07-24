@@ -314,6 +314,8 @@ bool PaymentsValidate(struct CCcontract_info *cp,Eval* eval,const CTransaction &
             fIsMerge = true;
         else if ( DecodePaymentsReleaseOpRet(ccopret,createtxid,amountReleased) != 'R' )
             return(eval->Invalid("could not decode ccopret"));
+        if ( tx.vout.back().scriptPubKey.IsOpReturn() )
+            fHasOpret = true;
         mpz_set_si(mpzCheckamount,amountReleased); 
     } else return(eval->Invalid("could not decode ccopret"));
     
@@ -557,7 +559,7 @@ int64_t AddPaymentsInputs(bool fLockedBlocks,int8_t GetBalance,struct CCcontract
             txid = it->first.txhash;
             vout = (int32_t)it->first.index;
             //fprintf(stderr,"iter.%d %s/v%d %s\n",iter,txid.GetHex().c_str(),vout,coinaddr);
-            if ( GetTransaction(txid,vintx,hashBlock,false) != 0 )
+            if ( myGetTransaction(txid,vintx,hashBlock) != 0 )
             {
                 if ( (nValue= IsPaymentsvout(cp,vintx,vout,coinaddr,ccopret)) > PAYMENTS_TXFEE && nValue >= threshold && myIsutxo_spentinmempool(ignoretxid,ignorevin,txid,vout) == 0 )
                 {
