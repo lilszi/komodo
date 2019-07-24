@@ -18,6 +18,7 @@
  */
 #include "CCinclude.h"
 #include "komodo_structs.h"
+#include "key_io.h"
 
 #ifdef TESTMODE           
     #define MIN_NON_NOTARIZED_CONFIRMS 2
@@ -187,7 +188,7 @@ void CCaddr3set(struct CCcontract_info *cp,uint8_t evalcode,CPubKey pk,uint8_t *
 }
 
 // set pubkeys, myprivkey and 1of2 cc addr for spending from 1of2 cryptocondition vout:
-void CCaddr1of2set(struct CCcontract_info *cp, CPubKey pk1, CPubKey pk2,uint8_t *priv,char *coinaddr)
+void CCaddr1of2set(struct CCcontract_info *cp, CPubKey pk1, CPubKey pk2, uint8_t *priv, char *coinaddr)
 {
 	cp->coins1of2pk[0] = pk1;
 	cp->coins1of2pk[1] = pk2;
@@ -197,20 +198,25 @@ void CCaddr1of2set(struct CCcontract_info *cp, CPubKey pk1, CPubKey pk2,uint8_t 
 
 // set pubkeys, myprivkey and 1of2 cc addr for spending from 1of2 token cryptocondition vout
 // to get tokenaddr use GetTokensCCaddress()
-void CCaddrTokens1of2set(struct CCcontract_info *cp, CPubKey pk1, CPubKey pk2, char *tokenaddr)
+void CCaddrTokens1of2set(struct CCcontract_info *cp, CPubKey pk1, CPubKey pk2, uint8_t *priv, char *tokenaddr)
 {
 	cp->tokens1of2pk[0] = pk1;
 	cp->tokens1of2pk[1] = pk2;
+    memcpy(cp->tokens1of2priv,priv,32);
 	strcpy(cp->tokens1of2addr, tokenaddr);
 }
 
 bool Getscriptaddress(char *destaddr,const CScript &scriptPubKey)
 {
     CTxDestination address; txnouttype whichType;
-    if ( ExtractDestination(scriptPubKey,address) != 0 )
+    destaddr[0] = 0;
+    if ( scriptPubKey.begin() != 0 )
     {
-        strcpy(destaddr,(char *)CBitcoinAddress(address).ToString().c_str());
-        return(true);
+        if ( ExtractDestination(scriptPubKey,address) != 0 )
+        {
+            strcpy(destaddr,(char *)CBitcoinAddress(address).ToString().c_str());
+            return(true);
+        }
     }
     //fprintf(stderr,"ExtractDestination failed\n");
     return(false);
@@ -444,9 +450,21 @@ std::vector<uint8_t> Mypubkey()
     return(pubkey);
 }
 
+extern char NSPV_wifstr[],NSPV_pubkeystr[];
+
 bool Myprivkey(uint8_t myprivkey[])
 {
     char coinaddr[64],checkaddr[64]; std::string strAddress; char *dest; int32_t i,n; CBitcoinAddress address; CKeyID keyID; CKey vchSecret; uint8_t buf33[33];
+    if ( KOMODO_NSPV != 0 )
+    {
+        vchSecret = DecodeSecret(NSPV_wifstr);
+        memcpy(myprivkey,vchSecret.begin(),32);
+        //for (i=0; i<32; i++)
+        //    fprintf(stderr,"%02x",myprivkey[i]);
+        //fprintf(stderr," myprivkey %s\n",NSPV_wifstr);
+        memset((uint8_t *)vchSecret.begin(),0,32);
+        return true;
+    }
     if ( Getscriptaddress(coinaddr,CScript() << Mypubkey() << OP_CHECKSIG) != 0 )
     {
         n = (int32_t)strlen(coinaddr);
@@ -461,6 +479,7 @@ bool Myprivkey(uint8_t myprivkey[])
             if ( pwalletMain->GetKey(keyID,vchSecret) != 0 )
             {
                 memcpy(myprivkey,vchSecret.begin(),32);
+                memset((uint8_t *)vchSecret.begin(),0,32);
                 if ( 0 )
                 {
                     for (i=0; i<32; i++)
@@ -566,9 +585,13 @@ uint256 CCOraclesReverseScan(char const *logcategory,uint256 &txid,int32_t heigh
     return(zeroid);
 }
 
+int32_t NSPV_coinaddr_inmempool(char const *logcategory,char *coinaddr,uint8_t CCflag);
+
 int32_t myIs_coinaddr_inmempoolvout(char const *logcategory,char *coinaddr)
 {
     int32_t i,n; char destaddr[64];
+    if ( KOMODO_NSPV != 0 )
+        return(NSPV_coinaddr_inmempool(logcategory,coinaddr,1));
     BOOST_FOREACH(const CTxMemPoolEntry &e,mempool.mapTx)
     {
         const CTransaction &tx = e.GetTx();
