@@ -74,7 +74,7 @@ static const char *notaries_STAKED[NUM_STAKED_ERAS][64][2] =
         {"test3", "033a8ced4ac89d5e68538ecbb2830d8346b88811d9ecb688ff894fbce5c7a0d727" },
         {"test4", "02ab7eb334eaa83a13d7d4b359ef655d24c64782d637889a6dc163be7f0479b5da" },
         {"test5", "0218ce501d2d099384f8ddec33664c6638a08da374264dbfe93144ec89080fae0f" },
-        {"test6", "02a0c097c4fce5af7da38174882903e5a055c99daacf354cc5b1c5c85f57a4d408" },
+        {"test6", "0317171af94ffa13f2fcd04095664ae036bb89cddae9168996f2e5de5ea115e4b7" },
         {"test7", "03780207528edb82d38de705659eaabe633326f376d9ced29e23d87b60858b7cdb" },
         {"test8", "02e3b902de67e2439a70facf6f815116897cd9312eda3622f9e398b73cd24c8223" },
         {"test9", "038e3589f8145ad4d2de671997df9d21961c89f2d9f9add802ed1cd30130e0e884" },
