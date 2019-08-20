@@ -111,6 +111,7 @@ static const CRPCConvertParam vRPCConvertParams[] =
     { "importprivkey", 2 },
     { "importprivkey", 3 },
     { "importprivkey", 4 },
+    { "rescanfromheight", 0 },
     { "importaddress", 2 },
     { "verifychain", 0 },
     { "verifychain", 1 },
