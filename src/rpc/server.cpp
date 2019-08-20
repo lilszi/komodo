@@ -370,7 +370,6 @@ static const CRPCCommand vRPCCommands[] =
     { "crosschain",       "importgatewaypartialsign",  &importgatewaypartialsign,     true },
     { "crosschain",       "importgatewaycompletesigning",  &importgatewaycompletesigning,     true },
     { "crosschain",       "importgatewaymarkdone",  &importgatewaymarkdone,     true },
-    { "crosschain",       "importgatewaypendingdeposits",   &importgatewaypendingdeposits,      true },
     { "crosschain",       "importgatewaypendingwithdraws",   &importgatewaypendingwithdraws,      true },
     { "crosschain",       "importgatewayprocessed",   &importgatewayprocessed,  true },
 
@@ -385,6 +384,7 @@ static const CRPCCommand vRPCCommands[] =
     { "mining",             "prioritisetransaction",  &prioritisetransaction,  true  },
     { "mining",             "submitblock",            &submitblock,            true  },
     { "mining",             "getblocksubsidy",        &getblocksubsidy,        true  },
+    { "mining",             "genminingCSV",           &genminingCSV,           true  },
 
 #ifdef ENABLE_MINING
     /* Coin generation */

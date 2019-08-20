@@ -139,7 +139,7 @@ void komodo_nSPVresp(CNode *pfrom,std::vector<uint8_t> response) // received a r
         switch ( response[0] )
         {
             case NSPV_INFORESP:
-                //fprintf(stderr,"got info response %u size.%d height.%d\n",timestamp,(int32_t)response.size(),NSPV_inforesult.height); // update current height and ntrz status
+                fprintf(stderr,"got version.%d info response %u size.%d height.%d\n",NSPV_inforesult.version,timestamp,(int32_t)response.size(),NSPV_inforesult.height); // update current height and ntrz status
                 I = NSPV_inforesult;
                 NSPV_inforesp_purge(&NSPV_inforesult);
                 NSPV_rwinforesp(0,&response[1],&NSPV_inforesult);
@@ -214,7 +214,7 @@ void komodo_nSPVresp(CNode *pfrom,std::vector<uint8_t> response) // received a r
 CNode *NSPV_req(CNode *pnode,uint8_t *msg,int32_t len,uint64_t mask,int32_t ind)
 {
     int32_t n,flag = 0; CNode *pnodes[64]; uint32_t timestamp = (uint32_t)time(NULL);
-    if ( KOMODO_NSPV == 0 )
+    if ( KOMODO_NSPV_FULLNODE )
         return(0);
     if ( pnode == 0 )
     {
@@ -243,7 +243,7 @@ CNode *NSPV_req(CNode *pnode,uint8_t *msg,int32_t len,uint64_t mask,int32_t ind)
         std::vector<uint8_t> request;
         request.resize(len);
         memcpy(&request[0],msg,len);
-        if ( (0) && KOMODO_NSPV != 0 )
+        if ( (0) && KOMODO_NSPV_SUPERLITE )
             fprintf(stderr,"pushmessage [%d] len.%d\n",msg[0],len);
         pnode->PushMessage("getnSPV",request);
         pnode->prevtimes[ind] = timestamp;
@@ -279,7 +279,7 @@ void komodo_nSPV(CNode *pto) // polling loop from SendMessages
         return;
     if ( pto->prevtimes[NSPV_INFO>>1] > timestamp )
         pto->prevtimes[NSPV_INFO>>1] = 0;
-    if ( KOMODO_NSPV != 0 )
+    if ( KOMODO_NSPV_SUPERLITE )
     {
         if ( timestamp > NSPV_lastinfo + ASSETCHAINS_BLOCKTIME/2 && timestamp > pto->prevtimes[NSPV_INFO>>1] + 2*ASSETCHAINS_BLOCKTIME/3 )
         {
@@ -355,7 +355,7 @@ UniValue NSPV_getinfo_json(struct NSPV_inforesp *ptr)
 {
     UniValue result(UniValue::VOBJ); int32_t expiration; uint32_t timestamp = (uint32_t)time(NULL);
     result.push_back(Pair("result","success"));
-    result.push_back(Pair("nSPV",KOMODO_NSPV!=0?"superlite":"fullnode"));
+    result.push_back(Pair("nSPV",KOMODO_NSPV==-1?"disabled":(KOMODO_NSPV_SUPERLITE?"superlite":"fullnode")));
     if ( NSPV_address.size() != 0 )
     {
         result.push_back(Pair("address",NSPV_address));
@@ -370,6 +370,7 @@ UniValue NSPV_getinfo_json(struct NSPV_inforesp *ptr)
     result.push_back(Pair("chaintip",ptr->blockhash.GetHex()));
     result.push_back(Pair("notarization",NSPV_ntz_json(&ptr->notarization)));
     result.push_back(Pair("header",NSPV_header_json(&ptr->H,ptr->hdrheight)));
+    result.push_back(Pair("protocolversion",(int64_t)ptr->version));
     result.push_back(Pair("lastpeer",NSPV_lastpeer));
     return(result);
 }
@@ -403,6 +404,7 @@ UniValue NSPV_utxosresp_json(struct NSPV_utxosresp *ptr)
     result.push_back(Pair("balance",(double)ptr->total/COIN));
     if ( ASSETCHAINS_SYMBOL[0] == 0 )
         result.push_back(Pair("interest",(double)ptr->interest/COIN));
+    result.push_back(Pair("filter",(int64_t)ptr->filter));
     result.push_back(Pair("lastpeer",NSPV_lastpeer));
     return(result);
 }
@@ -433,6 +435,7 @@ UniValue NSPV_txidsresp_json(struct NSPV_txidsresp *ptr)
     result.push_back(Pair("isCC",ptr->CCflag));
     result.push_back(Pair("height",(int64_t)ptr->nodeheight));
     result.push_back(Pair("numtxids",(int64_t)ptr->numtxids));
+    result.push_back(Pair("filter",(int64_t)ptr->filter));
     result.push_back(Pair("lastpeer",NSPV_lastpeer));
     return(result);
 }
@@ -534,7 +537,7 @@ UniValue NSPV_login(char *wifstr)
     result.push_back(Pair("address",NSPV_address));
     result.push_back(Pair("pubkey",HexStr(pubkey)));
     strcpy(NSPV_pubkeystr,HexStr(pubkey).c_str());
-    if ( KOMODO_NSPV != 0 )
+    if ( KOMODO_NSPV_SUPERLITE )
         decode_hex(NOTARY_PUBKEY33,33,NSPV_pubkeystr);
     result.push_back(Pair("wifprefix",(int64_t)data[0]));
     result.push_back(Pair("compressed",(int64_t)(data[len-5] == 1)));
@@ -580,12 +583,12 @@ uint32_t NSPV_blocktime(int32_t hdrheight)
     return(0);
 }
 
-UniValue NSPV_addressutxos(char *coinaddr,int32_t CCflag,int32_t skipcount)
+UniValue NSPV_addressutxos(char *coinaddr,int32_t CCflag,int32_t skipcount,int32_t filter)
 {
     UniValue result(UniValue::VOBJ); uint8_t msg[512]; int32_t i,iter,slen,len = 0;
     //fprintf(stderr,"utxos %s NSPV addr %s\n",coinaddr,NSPV_address.c_str());
-    if ( NSPV_utxosresult.nodeheight >= NSPV_inforesult.height && strcmp(coinaddr,NSPV_utxosresult.coinaddr) == 0 && CCflag == NSPV_utxosresult.CCflag  && skipcount == NSPV_utxosresult.skipcount )
-        return(NSPV_utxosresp_json(&NSPV_utxosresult));
+    //if ( NSPV_utxosresult.nodeheight >= NSPV_inforesult.height && strcmp(coinaddr,NSPV_utxosresult.coinaddr) == 0 && CCflag == NSPV_utxosresult.CCflag  && skipcount == NSPV_utxosresult.skipcount && filter == NSPV_utxosresult.filter )
+    //    return(NSPV_utxosresp_json(&NSPV_utxosresult));
     if ( skipcount < 0 )
         skipcount = 0;
     NSPV_utxosresp_purge(&NSPV_utxosresult);
@@ -601,6 +604,7 @@ UniValue NSPV_addressutxos(char *coinaddr,int32_t CCflag,int32_t skipcount)
     memcpy(&msg[len],coinaddr,slen), len += slen;
     msg[len++] = (CCflag != 0);
     len += iguana_rwnum(1,&msg[len],sizeof(skipcount),&skipcount);
+    len += iguana_rwnum(1,&msg[len],sizeof(filter),&filter);
     for (iter=0; iter<3; iter++)
     if ( NSPV_req(0,msg,len,NODE_ADDRINDEX,msg[0]>>1) != 0 )
     {
@@ -617,7 +621,7 @@ UniValue NSPV_addressutxos(char *coinaddr,int32_t CCflag,int32_t skipcount)
     return(result);
 }
 
-UniValue NSPV_addresstxids(char *coinaddr,int32_t CCflag,int32_t skipcount)
+UniValue NSPV_addresstxids(char *coinaddr,int32_t CCflag,int32_t skipcount,int32_t filter, uint256 filtertxid)
 {
     UniValue result(UniValue::VOBJ); uint8_t msg[512]; int32_t i,iter,slen,len = 0;
     if ( NSPV_txidsresult.nodeheight >= NSPV_inforesult.height && strcmp(coinaddr,NSPV_txidsresult.coinaddr) == 0 && CCflag == NSPV_txidsresult.CCflag && skipcount == NSPV_txidsresult.skipcount )
@@ -637,6 +641,12 @@ UniValue NSPV_addresstxids(char *coinaddr,int32_t CCflag,int32_t skipcount)
     memcpy(&msg[len],coinaddr,slen), len += slen;
     msg[len++] = (CCflag != 0);
     len += iguana_rwnum(1,&msg[len],sizeof(skipcount),&skipcount);
+    len += iguana_rwnum(1,&msg[len],sizeof(filter),&filter);
+    if (filtertxid!=zeroid)
+    {
+        NSPV_txidsresult.txids = (struct NSPV_txidresp *)malloc(sizeof(NSPV_txidsresult.txids));
+        NSPV_txidsresult.txids[0].txid=filtertxid;
+    }
     //fprintf(stderr,"skipcount.%d\n",skipcount);
     for (iter=0; iter<3; iter++)
     if ( NSPV_req(0,msg,len,NODE_ADDRINDEX,msg[0]>>1) != 0 )
