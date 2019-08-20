@@ -400,26 +400,33 @@ UniValue rescanfromheight(const UniValue& params, bool fHelp)
     if (!EnsureWalletIsAvailable(fHelp))
         return NullUniValue;
 
-    if (fHelp || params.size() != 1 )
+    if (fHelp || params.size() < 1 || params.size() > 2 )
         throw runtime_error(
-            "rescanfromheight height\n"
+            "rescanfromheight startHeight finishHeight\n"
             "\nRescans keys in your wallet from a height.\n"
             "\nArguments:\n"
-            "1. height               (integer, required, default=0) start at block height?\n"
+            "1. startHeight               (integer, required, default=0) start at block height\n"
+            "2. finishHeight              (integer, optional, default=tip) finish at block height?\n"
             "\nNote: This call can take minutes to complete for many blocks.\n"
             "\nExamples:\n"
-            + HelpExampleCli("rescanfromheight", "1280") +
+            + HelpExampleCli("rescanfromheight", "1280 50000") +
             "\nAs a JSON-RPC call\n"
-            + HelpExampleRpc("rescanfromheight", "1280")
+            + HelpExampleRpc("rescanfromheight", "1280 50000")
         );
 
     LOCK2(cs_main, pwalletMain->cs_wallet);
     
-    int32_t height = params[0].get_int();
-    if ( height < 0 || height > chainActive.Height() )
-        throw JSONRPCError(RPC_WALLET_ERROR, "Rescan height is out of range.");
+    int32_t startHeight = params[0].get_int();
+    if ( startHeight < 0 || startHeight > chainActive.Height() )
+        throw JSONRPCError(RPC_WALLET_ERROR, "Start height is out of range.");
     
-    pwalletMain->ScanForWalletTransactions(chainActive[height], true);
+    int32_t finishHeight = chainActive.Height();
+    if ( params.size() == 2 )
+        finishHeight = params[1].get_int();
+    if ( finishHeight < 0 || finishHeight > chainActive.Height() )
+        throw JSONRPCError(RPC_WALLET_ERROR, "Finish height is out of range.");
+    
+    pwalletMain->ScanForWalletTransactions(chainActive[startHeight], true, chainActive[finishHeight]);
     
     return(0);
 }
