@@ -30,6 +30,7 @@
 #define KOMODO_SAPLING_ACTIVATION 1544832000 // Dec 15th, 2018
 #define KOMODO_SAPLING_DEADLINE 1550188800 // Feb 15th, 2019
 #define _COINBASE_MATURITY 100
+#define KOMODO_MAX_UTXOCACHE_SIZE 64
 
 // KMD Notary Seasons 
 // 1: May 1st 2018 1530921600
@@ -271,7 +272,7 @@ extern uint64_t ASSETCHAINS_SUPPLY, ASSETCHAINS_FOUNDERS_REWARD;
 extern uint64_t ASSETCHAINS_TIMELOCKGTE;
 extern uint32_t ASSETCHAINS_ALGO, ASSETCHAINS_VERUSHASH,ASSETCHAINS_EQUIHASH,KOMODO_INITDONE;
 
-extern int32_t KOMODO_MININGTHREADS,KOMODO_LONGESTCHAIN,ASSETCHAINS_SEED,IS_KOMODO_NOTARY,USE_EXTERNAL_PUBKEY,KOMODO_CHOSEN_ONE,KOMODO_ON_DEMAND,KOMODO_PASSPORT_INITDONE,ASSETCHAINS_STAKED;
+extern int32_t KOMODO_MININGTHREADS,KOMODO_LONGESTCHAIN,ASSETCHAINS_SEED,IS_KOMODO_NOTARY,IS_STAKED_NOTARY,USE_EXTERNAL_PUBKEY,KOMODO_CHOSEN_ONE,KOMODO_ON_DEMAND,KOMODO_PASSPORT_INITDONE,ASSETCHAINS_STAKED;
 extern uint64_t ASSETCHAINS_COMMISSION, ASSETCHAINS_LASTERA,ASSETCHAINS_CBOPRET;
 extern bool VERUS_MINTBLOCKS;
 extern uint64_t ASSETCHAINS_REWARD[ASSETCHAINS_MAX_ERAS], ASSETCHAINS_NOTARY_PAY[ASSETCHAINS_MAX_ERAS], ASSETCHAINS_TIMELOCKGTE, ASSETCHAINS_NONCEMASK[],ASSETCHAINS_NK[2];
@@ -303,6 +304,8 @@ extern int32_t KOMODO_TESTNODE, KOMODO_SNAPSHOT_INTERVAL;
 extern int32_t ASSETCHAINS_EARLYTXIDCONTRACT;
 int tx_height( const uint256 &hash );
 extern std::vector<std::string> vWhiteListAddress;
+extern std::vector<struct komodo_utxocacheitem> vIguanaUTXOs;
+extern pthread_mutex_t utxocache_mutex;
 extern std::map <std::int8_t, int32_t> mapHeightEvalActivate;
 void komodo_netevent(std::vector<uint8_t> payload);
 int32_t getacseason(uint32_t timestamp);
@@ -335,6 +338,5 @@ int64_t komodo_pricemult(int32_t ind);
 int32_t komodo_priceget(int64_t *buf64,int32_t ind,int32_t height,int32_t numblocks);
 uint64_t komodo_accrued_interest(int32_t *txheightp,uint32_t *locktimep,uint256 hash,int32_t n,int32_t checkheight,uint64_t checkvalue,int32_t tipheight);
 int32_t komodo_currentheight();
-
 
 #endif

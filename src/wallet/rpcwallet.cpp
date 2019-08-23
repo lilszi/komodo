@@ -59,6 +59,7 @@
 #include <numeric>
 
 #include "komodo_defs.h"
+#include "komodo_structs.h"
 #include <string.h>
 
 using namespace std;
@@ -71,6 +72,7 @@ const std::string ADDR_TYPE_SPROUT = "sprout";
 const std::string ADDR_TYPE_SAPLING = "sapling";
 extern UniValue TxJoinSplitToJSON(const CTransaction& tx);
 extern int32_t KOMODO_INSYNC;
+extern pthread_mutex_t utxocache_mutex;
 uint32_t komodo_segid32(char *coinaddr);
 int32_t komodo_dpowconfs(int32_t height,int32_t numconfs);
 int32_t komodo_isnotaryvout(char *coinaddr,uint32_t tiptime); // from ac_private chains only
@@ -2813,13 +2815,13 @@ UniValue resendwallettransactions(const UniValue& params, bool fHelp)
     return result;
 }
 
+bool komodo_updateutxocache(CAmount nValue, CTxDestination notaryaddress, CTransaction* txin, int32_t vout);
+
 UniValue dpowlistunspent(const UniValue& params, bool fHelp)
 {
-    if (!EnsureWalletIsAvailable(fHelp))
-        return NullUniValue;
     if (fHelp || params.size() < 2)
         throw runtime_error(
-            "dpowlistunspent satoshies address\n"
+            "dpowlistunspent satoshies address (reset)\n"
             "Only for Notary Nodes, returns a single utxo of the requested size from the specified address from the utxo cache.\n"
             );
 
@@ -2827,52 +2829,33 @@ UniValue dpowlistunspent(const UniValue& params, bool fHelp)
     if ( value < 10000 )
         value = 10000;
     
-    CTxDestination dest;
-    if (!IsValidDestination(DecodeDestination(params[1].get_str())))
+    CTxDestination dest,address;
+    if (!IsValidDestination((dest= DecodeDestination(params[1].get_str()))))
         throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, std::string("Invalid Komodo address: ") + params[1].get_str());
     
-    assert(pwalletMain != NULL);
-    LOCK2(cs_main, pwalletMain->cs_wallet);
-
     UniValue results(UniValue::VARR);
-    static vector<COutput> vOutputsSaved;
-    if ( fResetUtxoCache )
+    struct komodo_utxocacheitem utxo;
+    LOCK2(cs_main, pwalletMain->cs_wallet);
+    pthread_mutex_lock(&utxocache_mutex);
+    if ( vIguanaUTXOs.size() == 0 && !komodo_updateutxocache(value, dest, (CTransaction*)NULL, -1) )
     {
-        vOutputsSaved.clear();
-        fResetUtxoCache = false;
+        pthread_mutex_unlock(&utxocache_mutex);
+        return(results);
     }
-    if ( vOutputsSaved.size() == 0 )
-    {
-        vector<COutput> vecOutputs;
-        pwalletMain->AvailableCoins(vecOutputs, true, NULL, false, false);
-        BOOST_FOREACH(const COutput& out, vecOutputs)
-        {
-            CTxDestination address;
-            if ( !ExtractDestination(out.tx->vout[out.i].scriptPubKey, address) )
-                continue;
-            if ( out.tx->vout[out.i].nValue != value )
-              continue;
-            vOutputsSaved.push_back(out);
-        }
-    }
-    if ( vOutputsSaved.size() > 0 )
-    {
-        const COutput& out = vOutputsSaved.back();
-        const CScript& pk = out.tx->vout[out.i].scriptPubKey;
-        UniValue entry(UniValue::VOBJ);
-        entry.push_back(Pair("txid", out.tx->GetHash().GetHex()));
-        entry.push_back(Pair("vout", out.i));
-        entry.push_back(Pair("generated", out.tx->IsCoinBase()));
-        CTxDestination address;
-        const CScript& scriptPubKey = out.tx->vout[out.i].scriptPubKey;
-        bool fValidAddress = ExtractDestination(scriptPubKey, address);
-        entry.push_back(Pair("address", EncodeDestination(address)));
-        entry.push_back(Pair("amount", ValueFromAmount(value)));
-        entry.push_back(Pair("scriptPubKey", HexStr(scriptPubKey.begin(), scriptPubKey.end())));
-        entry.push_back(Pair("spendable", out.fSpendable));
-        results.push_back(entry);
-        vOutputsSaved.pop_back();
-    }
+    utxo = vIguanaUTXOs[0];
+    vIguanaUTXOs.erase(vIguanaUTXOs.begin());
+    pthread_mutex_unlock(&utxocache_mutex);
+    
+    UniValue entry(UniValue::VOBJ);
+    entry.push_back(Pair("txid", utxo.txid.GetHex()));
+    entry.push_back(Pair("vout", utxo.vout));
+    entry.push_back(Pair("generated", false));
+    entry.push_back(Pair("address", params[1].get_str()));
+    entry.push_back(Pair("amount", ValueFromAmount(value)));
+    entry.push_back(Pair("scriptPubKey", HexStr(utxo.scriptPubKey.begin(), utxo.scriptPubKey.end())));
+    entry.push_back(Pair("spendable", true));
+    results.push_back(entry);
+
     return results;
 }
 
