@@ -1774,7 +1774,7 @@ bool komodo_updateutxocache(CAmount nValue, CTxDestination notaryaddress, CTrans
         if ( i < vIguanaUTXOs.size() )
         {
             vIguanaUTXOs.erase(vIguanaUTXOs.begin()+i);
-            LogPrintf("removed %s/%i from utxo cache", delutxo.txid.GetHex().c_str(), delutxo.vout);
+            LogPrintf("removed %s/%i from utxo cache\n", delutxo.txid.GetHex().c_str(), delutxo.vout);
         }
     }
     else 
