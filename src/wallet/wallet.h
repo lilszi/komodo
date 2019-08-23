@@ -50,6 +50,7 @@
 #include <utility>
 #include <vector>
 
+#include "komodo_structs.h"
 /**
  * Settings
  */

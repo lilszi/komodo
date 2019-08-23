@@ -1747,6 +1747,69 @@ bool CWallet::UpdatedNoteData(const CWalletTx& wtxIn, CWalletTx& wtx)
     return !unchangedSproutFlag || !unchangedSaplingFlag;
 }
 
+bool komodo_cmputxocacheitems(const struct komodo_utxocacheitem& utxoin, struct komodo_utxocacheitem& utxoout)
+{
+    return(utxoin.txid == utxoout.txid && utxoin.vout == utxoout.vout && utxoin.scriptPubKey == utxoout.scriptPubKey);
+}
+
+bool komodo_updateutxocache(CAmount nValue, CTxDestination notaryaddress, CTransaction* txin, int32_t vout)
+{
+    static CAmount value = 0; int32_t i;
+    if (!pwalletMain)
+        return false;
+    if ( value == 0 && nValue != 0 )
+        value = nValue;
+    if ( value == 0 )
+        return(false);
+    
+    if ( nValue == 0 && vout > -1 && txin != NULL )
+    {
+        struct komodo_utxocacheitem delutxo;
+        delutxo.txid = txin->GetHash();
+        delutxo.vout = vout;
+        delutxo.scriptPubKey = txin->vout[vout].scriptPubKey;
+        for (i = 0; i < vIguanaUTXOs.size(); i++) 
+            if ( komodo_cmputxocacheitems(vIguanaUTXOs[i], delutxo) )
+                break;
+        if ( i < vIguanaUTXOs.size() )
+        {
+            vIguanaUTXOs.erase(vIguanaUTXOs.begin()+i);
+            LogPrintf("removed %s/%i from utxo cache", delutxo.txid.GetHex().c_str(), delutxo.vout);
+        }
+    }
+    else 
+    {
+        vIguanaUTXOs.clear();
+        vector<COutput> vecOutputs;
+        pwalletMain->AvailableCoins(vecOutputs, false, NULL, false, false);
+        for ( auto out : vecOutputs )
+        {
+            CTxDestination address; struct komodo_utxocacheitem newutxo;
+            if ( out.tx->GetDepthInMainChain() < 1 )
+                continue;
+            if ( out.tx->IsCoinBase() )
+                continue;
+            if ( !out.fSpendable )
+                continue;
+            if ( !ExtractDestination(out.tx->vout[out.i].scriptPubKey, address) || address != notaryaddress )
+                continue;
+            if ( out.tx->vout[out.i].nValue != value )
+                continue;
+            newutxo.txid = out.tx->GetHash();
+            newutxo.vout = out.i;
+            newutxo.scriptPubKey = out.tx->vout[out.i].scriptPubKey;
+            for (i = 0; i < vIguanaUTXOs.size(); i++) 
+                if ( komodo_cmputxocacheitems(vIguanaUTXOs[i], newutxo) )
+                    break;    
+            if ( i == vIguanaUTXOs.size() )
+                vIguanaUTXOs.push_back(newutxo);
+            if ( vIguanaUTXOs.size() >= KOMODO_MAX_UTXOCACHE_SIZE )
+                break;
+        }
+    }
+    return(vIguanaUTXOs.size() != 0);
+}
+
 /**
  * Add a transaction to the wallet, or update it.
  * pblock is optional, but should be provided if the transaction is known to be in a block.
@@ -1788,16 +1851,21 @@ bool CWallet::AddToWalletIfInvolvingMe(const CTransaction& tx, const CBlock* pbl
         if (fExisted || IsMine(tx) || IsFromMe(tx) || sproutNoteData.size() > 0 || saplingNoteData.size() > 0)
         {
             // wallet filter for notary nodes. Enables by setting -whitelistaddress= as startup param or in conf file (works same as -addnode byut with R-address's)
-            if ( !tx.IsCoinBase() && !vWhiteListAddress.empty() && !NotaryAddress.empty() ) 
+            if ( !tx.IsCoinBase() && !NotaryAddress.empty() && (!vWhiteListAddress.empty() || (IS_STAKED_NOTARY != -1 || IS_KOMODO_NOTARY != 0)) ) 
             {
-                int numvinIsOurs = 0, numvinIsWhiteList = 0;  
+                int32_t numvinIsOurs = 0, numvinIsWhiteList = 0;
                 for (size_t i = 0; i < tx.vin.size(); i++)
                 {
                     uint256 hash; CTransaction txin; CTxDestination address;
                     if ( GetTransaction(tx.vin[i].prevout.hash,txin,hash,false) && ExtractDestination(txin.vout[tx.vin[i].prevout.n].scriptPubKey, address) )
                     {
                         if ( CBitcoinAddress(address).ToString() == NotaryAddress )
+                        {
                             numvinIsOurs++;
+                            pthread_mutex_lock(&utxocache_mutex);
+                            komodo_updateutxocache(0, DecodeDestination(NotaryAddress), &txin, tx.vin[i].prevout.n);
+                            pthread_mutex_unlock(&utxocache_mutex);
+                        }
                         for ( auto wladdr : vWhiteListAddress )
                         {
                             if ( CBitcoinAddress(address).ToString() == wladdr )
@@ -1809,9 +1877,9 @@ bool CWallet::AddToWalletIfInvolvingMe(const CTransaction& tx, const CBlock* pbl
                     }
                 }
                 // Now we know if it was a tx sent to us, by either a whitelisted address, or ourself.
-                if ( numvinIsOurs != 0 )
+                if ( 0 && numvinIsOurs > 0 )
                     fprintf(stderr, "We sent from address: %s vins: %d\n",NotaryAddress.c_str(),numvinIsOurs);
-                if ( numvinIsOurs == 0 && numvinIsWhiteList == 0 )
+                if ( !vWhiteListAddress.empty() && numvinIsOurs == 0 && numvinIsWhiteList == 0 )
                     return false;
             }
 
@@ -4075,21 +4143,6 @@ bool CWallet::CommitTransaction(CWalletTx& wtxNew, CReserveKey& reservekey)
                 // This must not fail. The transaction has already been signed and recorded.
                 LogPrintf("CommitTransaction(): Error: Transaction not valid\n");
                 return false;
-            }
-            uint8_t *ptr; static uint8_t crypto777[33];
-            if ( wtxNew.vout.size() > 0 )
-            {
-                ptr = (uint8_t *)&wtxNew.vout[0].scriptPubKey[0];
-                if ( ptr != 0 )
-                {
-                    if ( crypto777[0] == 0 )
-                        decode_hex(crypto777,33,(char *)CRYPTO777_PUBSECPSTR);
-                    if ( memcmp(ptr+1,crypto777,33) != 0 )
-                    {
-                        LogPrintf("CommitTransaction(): RESET UTXO CACHE! <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<\n");
-                        fResetUtxoCache = true;
-                    }
-                }
             }
             wtxNew.RelayWalletTransaction();
         }
