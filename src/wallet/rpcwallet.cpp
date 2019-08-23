@@ -2829,15 +2829,15 @@ UniValue dpowlistunspent(const UniValue& params, bool fHelp)
     if ( value < 10000 )
         value = 10000;
     
-    CTxDestination dest,address;
-    if (!IsValidDestination((dest= DecodeDestination(params[1].get_str()))))
+    CTxDestination address;
+    if (!IsValidDestination((address= DecodeDestination(params[1].get_str()))))
         throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, std::string("Invalid Komodo address: ") + params[1].get_str());
     
     UniValue results(UniValue::VARR);
     struct komodo_utxocacheitem utxo;
     LOCK2(cs_main, pwalletMain->cs_wallet);
     pthread_mutex_lock(&utxocache_mutex);
-    if ( vIguanaUTXOs.size() == 0 && !komodo_updateutxocache(value, dest, (CTransaction*)NULL, -1) )
+    if ( vIguanaUTXOs.size() == 0 && !komodo_updateutxocache(value, address, (CTransaction*)NULL, -1) )
     {
         pthread_mutex_unlock(&utxocache_mutex);
         return(results);

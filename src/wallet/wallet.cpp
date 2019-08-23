@@ -1747,7 +1747,7 @@ bool CWallet::UpdatedNoteData(const CWalletTx& wtxIn, CWalletTx& wtx)
     return !unchangedSproutFlag || !unchangedSaplingFlag;
 }
 
-bool komodo_cmputxocacheitems(const struct komodo_utxocacheitem& utxoin, struct komodo_utxocacheitem& utxoout)
+bool komodo_cmputxocacheitems(const struct komodo_utxocacheitem& utxoin, const struct komodo_utxocacheitem& utxoout)
 {
     return(utxoin.txid == utxoout.txid && utxoin.vout == utxoout.vout && utxoin.scriptPubKey == utxoout.scriptPubKey);
 }
