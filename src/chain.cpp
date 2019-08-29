@@ -66,13 +66,30 @@ CBlockLocator CChain::GetLocator(const CBlockIndex *pindex) const {
     return CBlockLocator(vHave);
 }
 
-const CBlockIndex *CChain::FindFork(const CBlockIndex *pindex) const {
+extern int32_t komodo_notarizeddata(int32_t nHeight,uint256 *notarized_hashp,uint256 *notarized_desttxidp);
+
+const CBlockIndex *CChain::FindFork(const CBlockIndex *pindex, int32_t *currht) const 
+{
+    // search for forks, but take into account notarizations, and refuse any chain that would reorg past the last valid notarization.
+    uint256 notarizedhash,txid;
+    int32_t ntzht, blocks = Height()-(ntzht= komodo_notarizeddata(*currht, &notarizedhash, &txid));
+    int32_t j = 0;
     if ( pindex == 0 )
-        return(0);
+        return(NULL);
     if (pindex->GetHeight() > Height())
         pindex = pindex->GetAncestor(Height());
     while (pindex && !Contains(pindex))
+    {
+        //fprintf(stderr, "j.%i currht.%i blocks.%i ntzht.%i\n", j, *currht, blocks, ntzht);
+        if ( ntzht > 0 && j == blocks &&  notarizedhash == pindex->GetBlockHash() ) 
+        {
+            fprintf(stderr, "ABORT trying to reorg past last notarisation ht.%i blockhash.%s!\n", pindex->GetHeight(), notarizedhash.GetHex().c_str());
+            *currht = ntzht;
+            return(NULL);
+        }
         pindex = pindex->pprev;
+        j++;
+    }
     return pindex;
 }
 

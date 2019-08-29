@@ -2135,59 +2135,6 @@ struct CompareBlocksByHeightMain
     }
 };
 
-bool RemoveOrphanedBlocks(int32_t notarized_height)
-{
-    LOCK(cs_main);
-    std::vector<const CBlockIndex*> prunedblocks;
-    std::set<const CBlockIndex*, CompareBlocksByHeightMain> setTips;
-    int32_t m=0,n = 0;
-    // get notarised timestamp and use this as a backup incase the forked block has no height. 
-    // we -600 to make sure the time is within future block constraints. 
-    uint32_t notarized_timestamp = komodo_heightstamp(notarized_height)-600;
-    // Most of this code is a direct copy from GetChainTips RPC. Which gives a return of all
-    // blocks that are not in the main chain.
-    BOOST_FOREACH(const PAIRTYPE(const uint256, CBlockIndex*)& item, mapBlockIndex)
-    {
-        n++;
-        setTips.insert(item.second);
-    }
-    n = 0;
-    BOOST_FOREACH(const PAIRTYPE(const uint256, CBlockIndex*)& item, mapBlockIndex)
-    {
-        const CBlockIndex* pprev=0;
-        n++;
-        if ( item.second != 0 )
-            pprev = item.second->pprev;
-        if (pprev)
-            setTips.erase(pprev);
-    }
-    const CBlockIndex *forked;
-    BOOST_FOREACH(const CBlockIndex* block, setTips)
-    {
-        // We skip anything over notarised height to avoid breaking normal consensus rules. 
-        if ( block->GetHeight() > notarized_height || block->nTime > notarized_timestamp )
-            continue;
-        // We can also check if the block is in the active chain as a backup test. 
-        forked = chainActive.FindFork(block);
-        // Here we save each forked block to a vector for removal later.
-        if ( forked != 0 )
-            prunedblocks.push_back(block); 
-    }
-    if (prunedblocks.size() > 0 && pblocktree->EraseBatchSync(prunedblocks))
-    {
-        // Blocks cleared from disk succesfully, using internal DB batch erase function. Which exists, but has never been used before.
-        // We need to try and clear the block index from mapBlockIndex now, otherwise node will need a restart. 
-        BOOST_FOREACH(const CBlockIndex* block, prunedblocks)
-        {
-            m++;
-            mapBlockIndex.erase(block->GetBlockHash());
-        }
-        fprintf(stderr, "%s removed %d orphans from %d blocks before %d\n",ASSETCHAINS_SYMBOL,m,n, notarized_height);
-        return true;
-    }    
-    return false;
-}
-
 /*uint64_t myGettxout(uint256 hash,int32_t n)
 {
     CCoins coins;
@@ -4312,7 +4259,14 @@ static CBlockIndex* FindMostWorkChain() {
                 return NULL;
             pindexNew = *it;
         }
-
+        
+        if ( chainActive.Tip() != 0 )
+        {
+            int32_t fetchht, ntzht = fetchht = chainActive.Height();
+            if ( chainActive.FindFork(pindexNew, &ntzht) == 0 && ntzht < fetchht ) 
+                return NULL;
+        }
+        
         // Check whether all blocks on the path between the currently active chain and the candidate are valid.
         // Just going until the active chain is an optimization, as we know all blocks in it are valid already.
         CBlockIndex *pindexTest = pindexNew;
@@ -4374,26 +4328,24 @@ static void PruneBlockIndexCandidates() {
 static bool ActivateBestChainStep(CValidationState &state, CBlockIndex *pindexMostWork, CBlock *pblock) {
     AssertLockHeld(cs_main);
     bool fInvalidFound = false;
+    
+    // get notarized height from chain tip. 
     const CBlockIndex *pindexOldTip = chainActive.Tip();
-    const CBlockIndex *pindexFork = chainActive.FindFork(pindexMostWork);
-
-    // stop trying to reorg if the reorged chain is before last notarized height. 
-    // stay on the same chain tip! 
-    int32_t notarizedht,prevMoMheight; uint256 notarizedhash,txid;
-    notarizedht = komodo_notarized_height(&prevMoMheight,&notarizedhash,&txid);
-    if ( pindexFork != 0 && pindexOldTip->GetHeight() > notarizedht && pindexFork->GetHeight() < notarizedht )
+    int32_t fetchht, ntzht = fetchht = chainActive.Tip()==0?-1:chainActive.Height();
+    const CBlockIndex *pindexFork = chainActive.FindFork(pindexMostWork,&ntzht);
+    if ( pindexFork == 0 && chainActive.Tip() != 0 && ntzht < fetchht )
     {
-        fprintf(stderr,"pindexOldTip->GetHeight().%d > notarizedht %d && pindexFork->GetHeight().%d is < notarizedht %d, so ignore it\n",(int32_t)pindexFork->GetHeight(),notarizedht,(int32_t)pindexOldTip->GetHeight(),notarizedht);
-        return state.DoS(100, error("ActivateBestChainStep(): pindexOldTip->GetHeight().%d > notarizedht %d && pindexFork->GetHeight().%d is < notarizedht %d, so ignore it",(int32_t)pindexFork->GetHeight(),notarizedht,(int32_t)pindexOldTip->GetHeight(),notarizedht),
+        printf("fork older than last known notarization.%i\n",ntzht);
+        return state.DoS(100, error("fork older than last known notarization.%i\n",ntzht),
                     REJECT_INVALID, "past-notarized-height");
-    }
+    } 
     // - On ChainDB initialization, pindexOldTip will be null, so there are no removable blocks.
     // - If pindexMostWork is in a chain that doesn't have the same genesis block as our chain,
     //   then pindexFork will be null, and we would need to remove the entire chain including
     //   our genesis block. In practice this (probably) won't happen because of checks elsewhere.
-    auto reorgLength = pindexOldTip ? pindexOldTip->GetHeight() - (pindexFork ? pindexFork->GetHeight() : -1) : 0;
+    auto reorgLength = (pindexOldTip ? pindexOldTip->GetHeight() - (pindexFork ? pindexFork->GetHeight() : -1) : 0);
     assert(MAX_REORG_LENGTH > 0);//, "We must be able to reorg some distance");
-    if ( reorgLength > MAX_REORG_LENGTH)
+    if ( reorgLength > MAX_REORG_LENGTH )
     {
         auto msg = strprintf(_(
                                "A block chain reorganization has been detected that would roll back %d blocks! "

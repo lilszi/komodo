@@ -640,7 +640,7 @@ public:
     CBlockLocator GetLocator(const CBlockIndex *pindex = NULL) const;
 
     /** Find the last common block between this chain and a block index entry. */
-    const CBlockIndex *FindFork(const CBlockIndex *pindex) const;
+    const CBlockIndex *FindFork(const CBlockIndex *pindex, int32_t *currht) const;
 };
 
 #endif // BITCOIN_CHAIN_H

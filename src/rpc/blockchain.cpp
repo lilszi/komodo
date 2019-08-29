@@ -1819,6 +1819,7 @@ struct CompareBlocksByHeight
 };
 
 #include <pthread.h>
+extern int32_t komodo_notarizeddata(int32_t nHeight,uint256 *notarized_hashp,uint256 *notarized_desttxidp);
 
 UniValue getchaintips(const UniValue& params, bool fHelp)
 {
@@ -1894,9 +1895,10 @@ UniValue getchaintips(const UniValue& params, bool fHelp)
     BOOST_FOREACH(const CBlockIndex* block, setTips)
         {
             UniValue obj(UniValue::VOBJ);
-            obj.push_back(Pair("height", block->GetHeight()));
+            int32_t fetchht, ntzht = fetchht = block->GetHeight(); uint256 notarizedhash,txid;
+            obj.push_back(Pair("height", fetchht));
             obj.push_back(Pair("hash", block->phashBlock->GetHex()));
-            forked = chainActive.FindFork(block);
+            forked = chainActive.FindFork(block,&ntzht); 
             if ( forked != 0 )
             {
                 const int branchLen = block->GetHeight() - forked->GetHeight();

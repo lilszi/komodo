@@ -37,6 +37,8 @@ struct komodo_event *komodo_eventadd(struct komodo_state *sp,int32_t height,char
     return(ep);
 }
 
+CBlockIndex *komodo_chainactive(int32_t height);
+
 void komodo_eventadd_notarized(struct komodo_state *sp,char *symbol,int32_t height,char *dest,uint256 notarized_hash,uint256 notarized_desttxid,int32_t notarizedheight,uint256 MoM,int32_t MoMdepth)
 {
     static uint32_t counter; int32_t verified=0; char *coin; struct komodo_event_notarized N;
@@ -46,10 +48,9 @@ void komodo_eventadd_notarized(struct komodo_state *sp,char *symbol,int32_t heig
         if ( counter++ < 100 )
             printf("[%s] error validating notarization ht.%d notarized_height.%d, if on a pruned %s node this can be ignored\n",ASSETCHAINS_SYMBOL,height,notarizedheight,dest);
     }
-    else if ( strcmp(symbol,coin) == 0 )
+    else if ( strcmp(symbol,coin) == 0 && komodo_chainactive(notarizedheight) != 0 )
     {
-        //if ( 0 && IS_KOMODO_NOTARY != 0 && verified != 0 )
-            fprintf(stderr,"validated [%s] ht.%d notarized %d\n",coin,height,notarizedheight);
+        fprintf(stderr,"validated [%s] ht.%d notarized %d\n",coin,height,notarizedheight);        
         memset(&N,0,sizeof(N));
         N.blockhash = notarized_hash;
         N.desttxid = notarized_desttxid;
