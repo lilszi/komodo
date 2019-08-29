@@ -48,7 +48,7 @@ void komodo_eventadd_notarized(struct komodo_state *sp,char *symbol,int32_t heig
     }
     else if ( strcmp(symbol,coin) == 0 )
     {
-        if ( 0 && IS_KOMODO_NOTARY != 0 && verified != 0 )
+        //if ( 0 && IS_KOMODO_NOTARY != 0 && verified != 0 )
             fprintf(stderr,"validated [%s] ht.%d notarized %d\n",coin,height,notarizedheight);
         memset(&N,0,sizeof(N));
         N.blockhash = notarized_hash;
