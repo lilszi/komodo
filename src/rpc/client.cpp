@@ -111,6 +111,8 @@ static const CRPCConvertParam vRPCConvertParams[] =
     { "importprivkey", 2 },
     { "importprivkey", 3 },
     { "importprivkey", 4 },
+    { "rescanfromheight", 0 },
+    { "rescanfromheight", 1 },
     { "importaddress", 2 },
     { "verifychain", 0 },
     { "verifychain", 1 },
@@ -178,6 +180,7 @@ static const CRPCConvertParam vRPCConvertParams[] =
     { "height_MoM", 1},
     { "calc_MoM", 2},
     { "migrate_completeimporttransaction", 1},
+    { "getccdisables", 0},
 };
 
 class CRPCConvertTable

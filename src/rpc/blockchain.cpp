@@ -922,6 +922,44 @@ UniValue gettxoutsetinfo(const UniValue& params, bool fHelp)
     return ret;
 }
 
+UniValue getccdisables(const UniValue& params, bool fHelp)
+{
+    if (fHelp || params.size() > 1 || params.size() < 0)
+        throw runtime_error(
+            "getccdisables\n"
+            "\nReturns all ccs disabled on a chain at height.\n"
+            "\nArguments:\n"
+            "  \"height\":n,     (numeric) (optional) default=tip The block height (index)\n"
+            "\nResult:\n"
+            "{\n"
+            "  \"height\":n,     (numeric) The block height\n"
+            "  \"cc_disables\" : [           (array) EVAL CODES enabled\n"
+            "        \"256\",    (numeric) evalcode\n"
+            "       ... ]\n"
+            "}\n"
+            "\nExamples:\n"
+            + HelpExampleCli("getccdisables", "140000")
+            + HelpExampleRpc("getccdisables", "140000")
+        );
+    LOCK(cs_main);
+    UniValue ret(UniValue::VOBJ); UniValue a(UniValue::VARR);
+    uint8_t ecode;
+    int ht = chainActive.Height();
+    if ( ht < 1 )
+        throw runtime_error("chain has no height\n");
+    
+    if (params.size() == 1) 
+        ht = params[0].get_int();
+
+    for (ecode = 0; ecode < 255; ecode++) 
+        if ( ASSETCHAINS_CCDISABLES[ecode] != 0 )
+            if ( mapHeightEvalActivate[ecode] != 0 && ht != 0 && mapHeightEvalActivate[ecode] < ht )
+                a.push_back(ecode);
+    
+    ret.push_back(Pair("height", ht));
+    ret.push_back(Pair("cc_disables", a));
+    return ret;
+}
 
 UniValue kvsearch(const UniValue& params, bool fHelp)
 {
@@ -2096,6 +2134,7 @@ static const CRPCCommand commands[] =
     { "blockchain",         "getrawmempool",          &getrawmempool,          true  },
     { "blockchain",         "gettxout",               &gettxout,               true  },
     { "blockchain",         "gettxoutsetinfo",        &gettxoutsetinfo,        true  },
+    { "blockchain",         "getccdisables",         &getccdisables,         true  },
     { "blockchain",         "verifychain",            &verifychain,            true  },
 
     /* Not shown in help */
