@@ -89,7 +89,7 @@ UniValue z_getoperationstatus_IMPL(const UniValue&, bool);
 
 #define PLAN_NAME_MAX   8
 #define VALID_PLAN_NAME(x)  (strlen(x) <= PLAN_NAME_MAX)
-#define THROW_IF_SYNCING(INSYNC)  if (INSYNC == 0) { throw runtime_error(strprintf("%s: %s still syncing height %d of %d, aborting to prevent linkability analysis!",__FUNCTION__,strprintf("%s",komodo_chainname()),INSYNC,chainActive.Tip()->GetHeight())); }
+#define THROW_IF_SYNCING(INSYNC)  if (INSYNC == 0) { throw runtime_error(strprintf("%s: %s still syncing height %d of %d, aborting to prevent linkability analysis!",__FUNCTION__,komodo_chainname(),INSYNC,chainActive.Tip()->GetHeight())); }
 
 int tx_height( const uint256 &hash );
 
