@@ -1747,6 +1747,15 @@ bool CWallet::UpdatedNoteData(const CWalletTx& wtxIn, CWalletTx& wtx)
     return !unchangedSproutFlag || !unchangedSaplingFlag;
 }
 
+struct komodo_utxocacheitem komodo_cacheitem(uint256 txid, int32_t vout, CScript scriptPubKey)
+{
+    struct komodo_utxocacheitem utxo;
+    utxo.txid = txid;
+    utxo.vout = vout;
+    utxo.scriptPubKey = scriptPubKey;
+    return(utxo);
+}
+
 bool komodo_cmputxocacheitems(const struct komodo_utxocacheitem& utxoin, const struct komodo_utxocacheitem& utxoout)
 {
     return(utxoin.txid == utxoout.txid && utxoin.vout == utxoout.vout && utxoin.scriptPubKey == utxoout.scriptPubKey);
@@ -1764,45 +1773,35 @@ bool komodo_updateutxocache(CAmount nValue, CTxDestination notaryaddress, CTrans
     
     if ( nValue == 0 && vout > -1 && txin != NULL )
     {
-        struct komodo_utxocacheitem delutxo;
-        delutxo.txid = txin->GetHash();
-        delutxo.vout = vout;
-        delutxo.scriptPubKey = txin->vout[vout].scriptPubKey;
+        struct komodo_utxocacheitem delutxo = komodo_cacheitem(txin->GetHash(), vout, txin->vout[vout].scriptPubKey);
         for (i = 0; i < vIguanaUTXOs.size(); i++) 
-            if ( komodo_cmputxocacheitems(vIguanaUTXOs[i], delutxo) )
-                break;
-        if ( i < vIguanaUTXOs.size() )
         {
-            vIguanaUTXOs.erase(vIguanaUTXOs.begin()+i);
-            LogPrintf("removed %s/%i from utxo cache\n", delutxo.txid.GetHex().c_str(), delutxo.vout);
+            if ( komodo_cmputxocacheitems(vIguanaUTXOs[i], delutxo) )
+            {
+                vIguanaUTXOs.erase(vIguanaUTXOs.begin()+i);
+                LogPrintf("removed %s/%i from utxo cache", delutxo.txid.GetHex().c_str(), delutxo.vout);
+                break;
+            }
         }
     }
-    else 
+    if ( vIguanaUTXOs.size() == 0 ) 
     {
-        vIguanaUTXOs.clear();
         vector<COutput> vecOutputs;
         pwalletMain->AvailableCoins(vecOutputs, false, NULL, false, false);
         for ( auto out : vecOutputs )
         {
-            CTxDestination address; struct komodo_utxocacheitem newutxo;
+            CTxDestination address;
             if ( out.tx->GetDepthInMainChain() < 1 )
                 continue;
             if ( out.tx->IsCoinBase() )
                 continue;
             if ( !out.fSpendable )
                 continue;
-            if ( !ExtractDestination(out.tx->vout[out.i].scriptPubKey, address) || address != notaryaddress )
-                continue;
             if ( out.tx->vout[out.i].nValue != value )
                 continue;
-            newutxo.txid = out.tx->GetHash();
-            newutxo.vout = out.i;
-            newutxo.scriptPubKey = out.tx->vout[out.i].scriptPubKey;
-            for (i = 0; i < vIguanaUTXOs.size(); i++) 
-                if ( komodo_cmputxocacheitems(vIguanaUTXOs[i], newutxo) )
-                    break;    
-            if ( i == vIguanaUTXOs.size() )
-                vIguanaUTXOs.push_back(newutxo);
+            if ( !ExtractDestination(out.tx->vout[out.i].scriptPubKey, address) || address != notaryaddress )
+                continue;
+            vIguanaUTXOs.push_back(komodo_cacheitem(out.tx->GetHash(), out.i, out.tx->vout[out.i].scriptPubKey));
             if ( vIguanaUTXOs.size() >= KOMODO_MAX_UTXOCACHE_SIZE )
                 break;
         }
