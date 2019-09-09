@@ -2895,7 +2895,7 @@ UniValue dpowlistunspent(const UniValue& params, bool fHelp)
     if ( vIguanaUTXOs.size() == 0 && !komodo_updateutxocache(value, address, (CTransaction*)NULL, -1) )
     {
         pthread_mutex_unlock(&utxocache_mutex);
-        return NullUniValue;
+        return(results);
     }
     utxo = vIguanaUTXOs[0];
     vIguanaUTXOs.erase(vIguanaUTXOs.begin());
