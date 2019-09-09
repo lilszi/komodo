@@ -89,7 +89,7 @@ UniValue z_getoperationstatus_IMPL(const UniValue&, bool);
 
 #define PLAN_NAME_MAX   8
 #define VALID_PLAN_NAME(x)  (strlen(x) <= PLAN_NAME_MAX)
-#define THROW_IF_SYNCING(INSYNC)  if (INSYNC == 0) { throw runtime_error(strprintf("%s: Chain still syncing at height %d, aborting to prevent linkability analysis!",__FUNCTION__,chainActive.Tip()->GetHeight())); }
+#define THROW_IF_SYNCING(INSYNC)  if (INSYNC == 0) { throw runtime_error(strprintf("%s: %s still syncing height %d of %d, aborting to prevent linkability analysis!",__FUNCTION__,komodo_chainname(),INSYNC,chainActive.Tip()->GetHeight())); }
 
 int tx_height( const uint256 &hash );
 
@@ -220,6 +220,42 @@ UniValue getnewaddress(const UniValue& params, bool fHelp)
     return EncodeDestination(keyID);
 }
 
+
+UniValue rescanfromheight(const UniValue& params, bool fHelp)
+{
+    if (!EnsureWalletIsAvailable(fHelp))
+        return NullUniValue;
+
+    if (fHelp || params.size() < 1 || params.size() > 2 )
+        throw runtime_error(
+            "rescanfromheight startHeight finishHeight\n"
+            "\nRescans keys in your wallet from a height.\n"
+            "\nArguments:\n"
+            "1. startHeight               (integer, required, default=0) start at block height\n"
+            "2. finishHeight              (integer, optional, default=tip) finish at block height?\n"
+            "\nNote: This call can take minutes to complete for many blocks.\n"
+            "\nExamples:\n"
+            + HelpExampleCli("rescanfromheight", "1280 50000") +
+            "\nAs a JSON-RPC call\n"
+            + HelpExampleRpc("rescanfromheight", "1280 50000")
+        );
+
+    LOCK2(cs_main, pwalletMain->cs_wallet);
+    
+    int32_t startHeight = params[0].get_int();
+    if ( startHeight < 0 || startHeight > chainActive.Height() )
+        throw JSONRPCError(RPC_WALLET_ERROR, "Start height is out of range.");
+    
+    int32_t finishHeight = chainActive.Height();
+    if ( params.size() == 2 )
+        finishHeight = params[1].get_int();
+    if ( finishHeight < 0 || finishHeight > chainActive.Height() )
+        throw JSONRPCError(RPC_WALLET_ERROR, "Finish height is out of range.");
+    
+    pwalletMain->ScanForWalletTransactions(chainActive[startHeight], true, chainActive[finishHeight]);
+    
+    return(0);
+}
 
 CTxDestination GetAccountAddress(std::string strAccount, bool bForceNew=false)
 {
@@ -8290,6 +8326,7 @@ static const CRPCCommand commands[] =
     { "wallet",             "getwalletinfo",            &getwalletinfo,            false },
     { "wallet",             "convertpassphrase",        &convertpassphrase,        true  },
     { "wallet",             "importprivkey",            &importprivkey,            true  },
+    { "wallet",             "rescanfromheight",         &rescanfromheight,         true  },
     { "wallet",             "importwallet",             &importwallet,             true  },
     { "wallet",             "importaddress",            &importaddress,            true  },
     { "wallet",             "keypoolrefill",            &keypoolrefill,            true  },
