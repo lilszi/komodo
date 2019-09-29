@@ -55,8 +55,8 @@ bool TransactionSignatureCreator::CreateSig(std::vector<unsigned char>& vchSig, 
         hash = SignatureHash(scriptCode, *txTo, nIn, nHashType, amount, consensusBranchId);
     } catch (logic_error ex) {
         {
-            fprintf(stderr,"logic error\n");
-        return false;
+            //fprintf(stderr,"logic error\n");
+            return false;
         }
     }
     SIG_TXHASH = hash;
@@ -66,7 +66,7 @@ bool TransactionSignatureCreator::CreateSig(std::vector<unsigned char>& vchSig, 
         key = *pprivKey;
     else if (!keystore || !keystore->GetKey(address, key))
     {
-        fprintf(stderr,"keystore.%p error\n",keystore);
+        //fprintf(stderr,"keystore.%p error\n",keystore);
         return false;
     }
     //fprintf(stderr,"privkey (%s) for %s\n",NSPV_wifstr,EncodeDestination(key.GetPubKey().GetID()).c_str());
@@ -77,7 +77,7 @@ bool TransactionSignatureCreator::CreateSig(std::vector<unsigned char>& vchSig, 
         // assume either 1of1 or 1of2. if the condition created by the
         if (!cc || cc_signTreeSecp256k1Msg32(cc, key.begin(), hash.begin()) == 0)
         {
-            fprintf(stderr,"CC tree error\n");
+            //fprintf(stderr,"CC tree error\n");
             return false;
         }
         vchSig = CCSigVec(cc);
@@ -91,7 +91,7 @@ bool TransactionSignatureCreator::CreateSig(std::vector<unsigned char>& vchSig, 
         {
             if (!key.Sign(hash, vchSig))
             {
-                fprintf(stderr,"key.Sign error\n");
+                //fprintf(stderr,"key.Sign error\n");
                 return false;
             }
             else
@@ -117,7 +117,7 @@ static bool Sign1(const CKeyID& address, const BaseSignatureCreator& creator, co
     vector<unsigned char> vchSig;
     if (!creator.CreateSig(vchSig, address, scriptCode, consensusBranchId))
     {
-        fprintf(stderr,"Sign1 creatsig error\n");
+        //fprintf(stderr,"Sign1 creatsig error\n");
         return false;
     }
     ret.push_back(vchSig);
@@ -215,7 +215,7 @@ bool _Getscriptaddress(char *destaddr, const CScript &scriptPubKey)
         strcpy(destaddr,(char *)CBitcoinAddress(address).ToString().c_str());
         return(true);
     }
-    fprintf(stderr,"Solver for scriptPubKey failed\n%s\n", scriptPubKey.ToString().c_str());
+    //fprintf(stderr,"Solver for scriptPubKey failed\n%s\n", scriptPubKey.ToString().c_str());
     return(false);
 }
 
@@ -383,7 +383,7 @@ static bool SignStep(const BaseSignatureCreator& creator, const CScript& scriptP
             keyID = CKeyID(uint160(vSolutions[0]));
             if (!Sign1(keyID, creator, scriptPubKey, ret, consensusBranchId))
             {
-                fprintf(stderr,"sign1 error\n");
+                //fprintf(stderr,"sign1 error\n");
                 return false;
             }
             else
