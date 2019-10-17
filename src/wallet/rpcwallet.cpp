@@ -72,7 +72,6 @@ const std::string ADDR_TYPE_SPROUT = "sprout";
 const std::string ADDR_TYPE_SAPLING = "sapling";
 extern UniValue TxJoinSplitToJSON(const CTransaction& tx);
 extern int32_t KOMODO_INSYNC;
-extern pthread_mutex_t utxocache_mutex;
 uint32_t komodo_segid32(char *coinaddr);
 int32_t komodo_dpowconfs(int32_t height,int32_t numconfs);
 int32_t komodo_isnotaryvout(char *coinaddr,uint32_t tiptime); // from ac_private chains only
@@ -81,8 +80,6 @@ CBlockIndex *komodo_getblockindex(uint256 hash);
 int64_t nWalletUnlockTime;
 static CCriticalSection cs_nWalletUnlockTime;
 std::string CCerror;
-
-bool fResetUtxoCache = false;
 
 // Private method:
 UniValue z_getoperationstatus_IMPL(const UniValue&, bool);
@@ -2871,6 +2868,7 @@ UniValue resendwallettransactions(const UniValue& params, bool fHelp)
 }
 
 bool komodo_updateutxocache(CAmount nValue, CTxDestination notaryaddress, CTransaction* txin, int32_t vout);
+int64_t CCgettxout(uint256 txid,int32_t vout,int32_t mempoolflag,int32_t lockflag);
 
 UniValue dpowlistunspent(const UniValue& params, bool fHelp)
 {
@@ -2891,15 +2889,13 @@ UniValue dpowlistunspent(const UniValue& params, bool fHelp)
     UniValue results(UniValue::VARR);
     struct komodo_utxocacheitem utxo;
     LOCK2(cs_main, pwalletMain->cs_wallet);
-    pthread_mutex_lock(&utxocache_mutex);
-    if ( vIguanaUTXOs.size() == 0 && !komodo_updateutxocache(value, address, (CTransaction*)NULL, -1) )
+    do 
     {
-        pthread_mutex_unlock(&utxocache_mutex);
-        return(results);
-    }
-    utxo = vIguanaUTXOs[0];
-    vIguanaUTXOs.erase(vIguanaUTXOs.begin());
-    pthread_mutex_unlock(&utxocache_mutex);
+        if ( vIguanaUTXOs.size() == 0 && !komodo_updateutxocache(value, address, (CTransaction*)NULL, -1) )
+            return(results);
+        utxo = vIguanaUTXOs[0];
+        vIguanaUTXOs.erase(vIguanaUTXOs.begin());
+    } while ( CCgettxout(utxo.txid, utxo.vout, 1, 0) != value );
     
     UniValue entry(UniValue::VOBJ);
     entry.push_back(Pair("txid", utxo.txid.GetHex()));

@@ -1787,14 +1787,10 @@ bool komodo_updateutxocache(CAmount nValue, CTxDestination notaryaddress, CTrans
     if ( vIguanaUTXOs.size() == 0 ) 
     {
         vector<COutput> vecOutputs;
-        pwalletMain->AvailableCoins(vecOutputs, false, NULL, false, false);
+        pwalletMain->AvailableCoins(vecOutputs, true, NULL, false, false);
         for ( auto out : vecOutputs )
         {
             CTxDestination address;
-            if ( out.tx->GetDepthInMainChain() < 1 )
-                continue;
-            if ( out.tx->IsCoinBase() )
-                continue;
             if ( !out.fSpendable )
                 continue;
             if ( out.tx->vout[out.i].nValue != value )
@@ -1861,9 +1857,7 @@ bool CWallet::AddToWalletIfInvolvingMe(const CTransaction& tx, const CBlock* pbl
                         if ( CBitcoinAddress(address).ToString() == NotaryAddress )
                         {
                             numvinIsOurs++;
-                            pthread_mutex_lock(&utxocache_mutex);
                             komodo_updateutxocache(0, DecodeDestination(NotaryAddress), &txin, tx.vin[i].prevout.n);
-                            pthread_mutex_unlock(&utxocache_mutex);
                         }
                         for ( auto wladdr : vWhiteListAddress )
                         {

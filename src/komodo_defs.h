@@ -310,7 +310,6 @@ extern int32_t ASSETCHAINS_EARLYTXIDCONTRACT;
 int tx_height( const uint256 &hash );
 extern std::vector<std::string> vWhiteListAddress;
 extern std::vector<struct komodo_utxocacheitem> vIguanaUTXOs;
-extern pthread_mutex_t utxocache_mutex;
 extern std::map <std::int8_t, int32_t> mapHeightEvalActivate;
 void komodo_netevent(std::vector<uint8_t> payload);
 int32_t getacseason(uint32_t timestamp);
