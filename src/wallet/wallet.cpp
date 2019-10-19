@@ -1795,6 +1795,9 @@ bool komodo_updateutxocache(CAmount nValue, CTxDestination notaryaddress, CTrans
                 continue;
             if ( out.tx->vout[out.i].nValue != value )
                 continue;
+            // some chain depth is required
+            if ( out.nDepth < 5 )
+                continue;
             if ( !ExtractDestination(out.tx->vout[out.i].scriptPubKey, address) || address != notaryaddress )
                 continue;
             vIguanaUTXOs.push_back(komodo_cacheitem(out.tx->GetHash(), out.i, out.tx->vout[out.i].scriptPubKey));

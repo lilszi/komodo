@@ -2895,7 +2895,7 @@ UniValue dpowlistunspent(const UniValue& params, bool fHelp)
             return(results);
         utxo = vIguanaUTXOs[0];
         vIguanaUTXOs.erase(vIguanaUTXOs.begin());
-    } while ( CCgettxout(utxo.txid, utxo.vout, 1, 0) != value );
+    } while ( CCgettxout(utxo.txid, utxo.vout, 0, 0) != value ); // do not check mempool!
     
     UniValue entry(UniValue::VOBJ);
     entry.push_back(Pair("txid", utxo.txid.GetHex()));
