@@ -2871,7 +2871,7 @@ UniValue resendwallettransactions(const UniValue& params, bool fHelp, const CPub
 bool komodo_updateutxocache(CAmount nValue, CTxDestination notaryaddress, CTransaction* txin, int32_t vout);
 int64_t CCgettxout(uint256 txid,int32_t vout,int32_t mempoolflag,int32_t lockflag);
 
-UniValue dpowlistunspent(const UniValue& params, bool fHelp)
+UniValue dpowlistunspent(const UniValue& params, bool fHelp, const CPubKey& mypk)
 {
     if (fHelp || params.size() < 2)
         throw runtime_error(
