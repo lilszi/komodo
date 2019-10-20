@@ -929,7 +929,7 @@ UniValue gettxoutsetinfo(const UniValue& params, bool fHelp, const CPubKey& mypk
     return ret;
 }
 
-UniValue getccdisables(const UniValue& params, bool fHelp)
+UniValue getccdisables(const UniValue& params, bool fHelp, const CPubKey& mypk)
 {
     if (fHelp || params.size() > 1 || params.size() < 0)
         throw runtime_error(
