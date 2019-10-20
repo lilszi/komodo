@@ -203,8 +203,6 @@ std::string JSONRPCExecBatch(const UniValue& vReq);
 
 extern std::string experimentalDisabledHelpMsg(const std::string& rpc, const std::string& enableArg);
 
-extern UniValue getccdisables(const UniValue& params, bool fHelp);
-
 extern UniValue getconnectioncount(const UniValue& params, bool fHelp, const CPubKey& mypk); // in rpcnet.cpp
 extern UniValue getaddressmempool(const UniValue& params, bool fHelp, const CPubKey& mypk);
 extern UniValue getaddressutxos(const UniValue& params, bool fHelp, const CPubKey& mypk);
