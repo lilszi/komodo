@@ -219,7 +219,7 @@ UniValue getnewaddress(const UniValue& params, bool fHelp, const CPubKey& mypk)
 }
 
 
-UniValue rescanfromheight(const UniValue& params, bool fHelp)
+UniValue rescanfromheight(const UniValue& params, bool fHelp, const CPubKey& mypk)
 {
     if (!EnsureWalletIsAvailable(fHelp))
         return NullUniValue;
