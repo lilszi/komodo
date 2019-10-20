@@ -203,6 +203,8 @@ std::string JSONRPCExecBatch(const UniValue& vReq);
 
 extern std::string experimentalDisabledHelpMsg(const std::string& rpc, const std::string& enableArg);
 
+extern UniValue getccdisables(const UniValue& params, bool fHelp);
+
 extern UniValue getconnectioncount(const UniValue& params, bool fHelp, const CPubKey& mypk); // in rpcnet.cpp
 extern UniValue getaddressmempool(const UniValue& params, bool fHelp, const CPubKey& mypk);
 extern UniValue getaddressutxos(const UniValue& params, bool fHelp, const CPubKey& mypk);
@@ -422,6 +424,7 @@ extern UniValue jumblr_resume(const UniValue& params, bool fHelp, const CPubKey&
 
 extern UniValue getrawtransaction(const UniValue& params, bool fHelp, const CPubKey& mypk); // in rcprawtransaction.cpp
 extern UniValue listunspent(const UniValue& params, bool fHelp, const CPubKey& mypk);
+extern UniValue dpowlistunspent(const UniValue& params, bool fHelp);
 extern UniValue lockunspent(const UniValue& params, bool fHelp, const CPubKey& mypk);
 extern UniValue listlockunspent(const UniValue& params, bool fHelp, const CPubKey& mypk);
 extern UniValue createrawtransaction(const UniValue& params, bool fHelp, const CPubKey& mypk);
@@ -538,7 +541,5 @@ extern UniValue pricesrekt(const UniValue& params, bool fHelp, const CPubKey& my
 extern UniValue pricesaddfunding(const UniValue& params, bool fHelp, const CPubKey& mypk);
 extern UniValue pricesgetorderbook(const UniValue& params, bool fHelp, const CPubKey& mypk);
 extern UniValue pricesrefillfund(const UniValue& params, bool fHelp, const CPubKey& mypk);
-
-
 
 #endif // BITCOIN_RPCSERVER_H
