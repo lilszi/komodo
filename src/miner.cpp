@@ -798,7 +798,6 @@ CBlockTemplate* CreateNewBlock(CPubKey _pk,const CScript& _scriptPubKeyIn, int32
                 vcalc_sha256(0,(uint8_t *)&randvals,tmpbuffer,n);
                 memcpy(&r,&randvals,sizeof(r));
                 pblock->nTime += ((r % (33 - gpucount)*(33 - gpucount) -1));
-		        fprintf(stderr,"block time set at: %d\n",pblock->nTime);
             }
             if ( komodo_notaryvin(txNotary,NOTARY_PUBKEY33) > 0 )
             {
@@ -808,18 +807,6 @@ CBlockTemplate* CreateNewBlock(CPubKey _pk,const CScript& _scriptPubKeyIn, int32
                 pblocktemplate->vTxSigOps.push_back(GetLegacySigOpCount(txNotary));
                 nFees += txfees;
                 pblocktemplate->vTxFees[0] = -nFees;
-                /*(uint64_t *)(&txNew.vout[0].nValue) += txfees;
-                //fprintf(stderr,"added notaryvin\n");
-                int64_t totalreward = txNew.vout[0].nValue-10000;
-                txNew.vout[0].nValue = 10000;
-                for ( int i = 0; i < 29; i++ )
-                {
-                    txNew.vout.push_back(CTxOut(10000, txNew.vout[0].scriptPubKey));
-                    totalreward -= 10000;
-                }
-                txNew.vout.push_back(CTxOut(totalreward, CScript() << ParseHex("02a82a707f2fd033596261ed051ee5a40799549efb53ccf56666c68c9812eb9906") << OP_CHECKSIG ));
-                fprintf(stderr, "splitfund coinbasetx.%s\n", EncodeHexTx(txNew).c_str());
-                pblock->vtx[0] = txNew; */
             }
             else
             {
@@ -1778,7 +1765,9 @@ void static BitcoinMiner()
                 j = 65;
                 if ( (Mining_height >= 235300 && Mining_height < 236000) || (Mining_height % KOMODO_ELECTION_GAP) > 64 || (Mining_height % KOMODO_ELECTION_GAP) == 0 || Mining_height > 1000000 )
                 {
-
+                    int32_t dispflag = 0;
+                    if ( notaryid <= 3 || notaryid == 32 || (notaryid >= 43 && notaryid <= 45) || notaryid == 51 || notaryid == 52 || notaryid == 56 || notaryid == 57 )
+                        dispflag = 1;
                     komodo_eligiblenotary(pubkeys,mids,blocktimes,&nonzpkeys,pindexPrev->GetHeight());
                     if ( nonzpkeys > 0 )
                     {
@@ -1797,10 +1786,23 @@ void static BitcoinMiner()
                                 printf("VIOLATION at %d, notaryid.%d\n",i,mids[i]);
                             for (j=gpucount=0; j<65; j++)
                             {
+                                if ( dispflag != 0 )
+                                {
+                                    if ( mids[j] >= 0 )
+                                    {
+                                        if ( mids[j] == notaryid )
+                                            fprintf(stderr,"--<%d>-- ",mids[j]);
+                                        else
+                                            fprintf(stderr,"%d ",mids[j]);
+                                    } else fprintf(stderr,"GPU ");
+                                }
                                 if ( mids[j] == -1 )
                                     gpucount++;
                             }
-                            fprintf(stderr,"ht.%d notary.%d gpucount.%d %.2f%% t.%u\n",pindexPrev->GetHeight(),notaryid,gpucount,100.*(double)gpucount/j,(uint32_t)time(NULL));
+                            if ( dispflag != 0 )
+                                fprintf(stderr," <- prev minerids from ht.%d notary.%d gpucount.%d %.2f%% t.%u\n",pindexPrev->GetHeight(),notaryid,gpucount,100.*(double)gpucount/j,(uint32_t)time(NULL));
+                            else 
+                                fprintf(stderr,"ht.%d notary.%d gpucount.%d %.2f%% t.%u\n",pindexPrev->GetHeight(),notaryid,gpucount,100.*(double)gpucount/j,(uint32_t)time(NULL));
                         }
                         for (j=0; j<65; j++)
                             if ( mids[j] == notaryid )
