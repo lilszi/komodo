@@ -422,6 +422,7 @@ extern UniValue jumblr_resume(const UniValue& params, bool fHelp, const CPubKey&
 
 extern UniValue getrawtransaction(const UniValue& params, bool fHelp, const CPubKey& mypk); // in rcprawtransaction.cpp
 extern UniValue listunspent(const UniValue& params, bool fHelp, const CPubKey& mypk);
+extern UniValue dpowlistunspent(const UniValue& params, bool fHelp, const CPubKey& mypk);
 extern UniValue lockunspent(const UniValue& params, bool fHelp, const CPubKey& mypk);
 extern UniValue listlockunspent(const UniValue& params, bool fHelp, const CPubKey& mypk);
 extern UniValue createrawtransaction(const UniValue& params, bool fHelp, const CPubKey& mypk);
@@ -447,6 +448,7 @@ extern UniValue getlastsegidstakes(const UniValue& params, bool fHelp, const CPu
 extern UniValue getblock(const UniValue& params, bool fHelp, const CPubKey& mypk);
 extern UniValue gettxoutsetinfo(const UniValue& params, bool fHelp, const CPubKey& mypk);
 extern UniValue gettxout(const UniValue& params, bool fHelp, const CPubKey& mypk);
+extern UniValue getccdisables(const UniValue& params, bool fHelp, const CPubKey& mypk);
 extern UniValue verifychain(const UniValue& params, bool fHelp, const CPubKey& mypk);
 extern UniValue getchaintips(const UniValue& params, bool fHelp, const CPubKey& mypk);
 extern UniValue invalidateblock(const UniValue& params, bool fHelp, const CPubKey& mypk);

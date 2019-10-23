@@ -59,7 +59,6 @@ bool bSpendZeroConfChange = true;
 bool fSendFreeTransactions = false;
 bool fPayAtLeastCustomFee = true;
 #include "komodo_defs.h"
-
 CBlockIndex *komodo_chainactive(int32_t height);
 extern std::string DONATION_PUBKEY;
 int32_t komodo_dpowconfs(int32_t height,int32_t numconfs);
@@ -1747,6 +1746,67 @@ bool CWallet::UpdatedNoteData(const CWalletTx& wtxIn, CWalletTx& wtx)
     return !unchangedSproutFlag || !unchangedSaplingFlag;
 }
 
+struct komodo_utxocacheitem komodo_cacheitem(uint256 txid, int32_t vout, CScript scriptPubKey)
+{
+    struct komodo_utxocacheitem utxo;
+    utxo.txid = txid;
+    utxo.vout = vout;
+    utxo.scriptPubKey = scriptPubKey;
+    return(utxo);
+}
+
+bool komodo_cmputxocacheitems(const struct komodo_utxocacheitem& utxoin, const struct komodo_utxocacheitem& utxoout)
+{
+    return(utxoin.txid == utxoout.txid && utxoin.vout == utxoout.vout && utxoin.scriptPubKey == utxoout.scriptPubKey);
+}
+
+bool komodo_updateutxocache(CAmount nValue, CTxDestination notaryaddress, CTransaction* txin, int32_t vout)
+{
+    static CAmount value = 0; int32_t i;
+    if (!pwalletMain)
+        return false;
+    if ( value == 0 && nValue != 0 )
+        value = nValue;
+    if ( value == 0 )
+        return(false);
+    
+    if ( nValue == 0 && vout > -1 && txin != NULL )
+    {
+        struct komodo_utxocacheitem delutxo = komodo_cacheitem(txin->GetHash(), vout, txin->vout[vout].scriptPubKey);
+        for (i = 0; i < vIguanaUTXOs.size(); i++) 
+        {
+            if ( komodo_cmputxocacheitems(vIguanaUTXOs[i], delutxo) )
+            {
+                vIguanaUTXOs.erase(vIguanaUTXOs.begin()+i);
+                LogPrintf("removed %s/%i from utxo cache", delutxo.txid.GetHex().c_str(), delutxo.vout);
+                break;
+            }
+        }
+    }
+    if ( vIguanaUTXOs.size() == 0 ) 
+    {
+        vector<COutput> vecOutputs;
+        pwalletMain->AvailableCoins(vecOutputs, true, NULL, false, false);
+        for ( auto out : vecOutputs )
+        {
+            CTxDestination address;
+            if ( !out.fSpendable )
+                continue;
+            if ( out.tx->vout[out.i].nValue != value )
+                continue;
+            // some chain depth is required
+            if ( out.nDepth < 5 )
+                continue;
+            if ( !ExtractDestination(out.tx->vout[out.i].scriptPubKey, address) || address != notaryaddress )
+                continue;
+            vIguanaUTXOs.push_back(komodo_cacheitem(out.tx->GetHash(), out.i, out.tx->vout[out.i].scriptPubKey));
+            if ( vIguanaUTXOs.size() >= KOMODO_MAX_UTXOCACHE_SIZE )
+                break;
+        }
+    }
+    return(vIguanaUTXOs.size() != 0);
+}
+
 /**
  * Add a transaction to the wallet, or update it.
  * pblock is optional, but should be provided if the transaction is known to be in a block.
@@ -1788,16 +1848,19 @@ bool CWallet::AddToWalletIfInvolvingMe(const CTransaction& tx, const CBlock* pbl
         if (fExisted || IsMine(tx) || IsFromMe(tx) || sproutNoteData.size() > 0 || saplingNoteData.size() > 0)
         {
             // wallet filter for notary nodes. Enables by setting -whitelistaddress= as startup param or in conf file (works same as -addnode byut with R-address's)
-            if ( !tx.IsCoinBase() && !vWhiteListAddress.empty() && !NotaryAddress.empty() ) 
+            if ( !tx.IsCoinBase() && !NotaryAddress.empty() && (!vWhiteListAddress.empty() || (IS_STAKED_NOTARY != -1 || IS_KOMODO_NOTARY != 0)) ) 
             {
-                int numvinIsOurs = 0, numvinIsWhiteList = 0;  
+                int32_t numvinIsOurs = 0, numvinIsWhiteList = 0;
                 for (size_t i = 0; i < tx.vin.size(); i++)
                 {
                     uint256 hash; CTransaction txin; CTxDestination address;
                     if ( GetTransaction(tx.vin[i].prevout.hash,txin,hash,false) && ExtractDestination(txin.vout[tx.vin[i].prevout.n].scriptPubKey, address) )
                     {
                         if ( CBitcoinAddress(address).ToString() == NotaryAddress )
+                        {
                             numvinIsOurs++;
+                            komodo_updateutxocache(0, DecodeDestination(NotaryAddress), &txin, tx.vin[i].prevout.n);
+                        }
                         for ( auto wladdr : vWhiteListAddress )
                         {
                             if ( CBitcoinAddress(address).ToString() == wladdr )
@@ -1809,9 +1872,9 @@ bool CWallet::AddToWalletIfInvolvingMe(const CTransaction& tx, const CBlock* pbl
                     }
                 }
                 // Now we know if it was a tx sent to us, by either a whitelisted address, or ourself.
-                if ( numvinIsOurs != 0 )
+                if ( 0 && numvinIsOurs > 0 )
                     fprintf(stderr, "We sent from address: %s vins: %d\n",NotaryAddress.c_str(),numvinIsOurs);
-                if ( numvinIsOurs == 0 && numvinIsWhiteList == 0 )
+                if ( !vWhiteListAddress.empty() && numvinIsOurs == 0 && numvinIsWhiteList == 0 )
                     return false;
             }
 
@@ -2862,7 +2925,7 @@ void CWallet::WitnessNoteCommitment(std::vector<uint256> commitments,
  * from or to us. If fUpdate is true, found transactions that already
  * exist in the wallet will be updated.
  */
-int CWallet::ScanForWalletTransactions(CBlockIndex* pindexStart, bool fUpdate)
+int CWallet::ScanForWalletTransactions(CBlockIndex* pindexStart, bool fUpdate, CBlockIndex* pindexFinish)
 {
     int ret = 0;
     int64_t nNow = GetTime();
@@ -2875,19 +2938,24 @@ int CWallet::ScanForWalletTransactions(CBlockIndex* pindexStart, bool fUpdate)
     {
         LOCK2(cs_main, cs_wallet);
 
-        // no need to read and scan block, if block was created before
-        // our wallet birthday (as adjusted for block time variability)
-        while (pindex && nTimeFirstKey && (pindex->GetBlockTime() < (nTimeFirstKey - 7200)))
-            pindex = chainActive.Next(pindex);
+        if ( pindexFinish == NULL )
+        {
+            // no need to read and scan block, if block was created before
+            // our wallet birthday (as adjusted for block time variability)
+            while (pindex && nTimeFirstKey && (pindex->GetBlockTime() < (nTimeFirstKey - 7200)))
+                pindex = chainActive.Next(pindex);
+        } 
 
         ShowProgress(_("Rescanning..."), 0); // show rescan progress in GUI as dialog or on splashscreen, if -rescan on startup
         double dProgressStart = Checkpoints::GuessVerificationProgress(chainParams.Checkpoints(), pindex, false);
         double dProgressTip = Checkpoints::GuessVerificationProgress(chainParams.Checkpoints(), chainActive.LastTip(), false);
         while (pindex)
         {
-            if (pindex->GetHeight() % 100 == 0 && dProgressTip - dProgressStart > 0.0)
-                ShowProgress(_("Rescanning..."), std::max(1, std::min(99, (int)((Checkpoints::GuessVerificationProgress(chainParams.Checkpoints(), pindex, false) - dProgressStart) / (dProgressTip - dProgressStart) * 100))));
-
+            if ( pindexFinish == NULL )
+            {
+                if (pindex->GetHeight() % 100 == 0 && dProgressTip - dProgressStart > 0.0)
+                    ShowProgress(_("Rescanning..."), std::max(1, std::min(99, (int)((Checkpoints::GuessVerificationProgress(chainParams.Checkpoints(), pindex, false) - dProgressStart) / (dProgressTip - dProgressStart) * 100))));
+            }
             CBlock block;
             ReadBlockFromDisk(block, pindex,1);
             BOOST_FOREACH(CTransaction& tx, block.vtx)
@@ -2910,11 +2978,17 @@ int CWallet::ScanForWalletTransactions(CBlockIndex* pindexStart, bool fUpdate)
             }
             // Increment note witness caches
             ChainTip(pindex, &block, sproutTree, saplingTree, true);
-
+            
+            // Stop rescan at height. 
+            //fprintf(stderr, "pindexFinish.%i vs pindex.%i\n",pindexFinish->GetHeight(), pindex->GetHeight());
+            if ( pindexFinish != NULL && pindex->GetHeight() >= pindexFinish->GetHeight() )
+                break;
+            
             pindex = chainActive.Next(pindex);
             if (GetTime() >= nNow + 60) {
                 nNow = GetTime();
-                LogPrintf("Still rescanning. At block %d. Progress=%f\n", pindex->GetHeight(), Checkpoints::GuessVerificationProgress(chainParams.Checkpoints(), pindex));
+                LogPrintf("Still rescanning. At block %d. Progress=%f\n", pindex->GetHeight(), pindexFinish == NULL ? Checkpoints::GuessVerificationProgress(chainParams.Checkpoints(), pindex) : \
+                    (((pindex->GetHeight()-pindexStart->GetHeight())*100) / (pindexFinish->GetHeight()-pindexStart->GetHeight())) );
             }
         }
 
@@ -4173,7 +4247,6 @@ bool CWallet::CommitTransaction(CWalletTx& wtxNew, CReserveKey& reservekey)
             // Broadcast
             if (!wtxNew.AcceptToMemoryPool(false))
             {
-                fprintf(stderr,"commit failed\n");
                 // This must not fail. The transaction has already been signed and recorded.
                 LogPrintf("CommitTransaction(): Error: Transaction not valid\n");
                 return false;
