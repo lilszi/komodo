@@ -50,6 +50,7 @@
 #include <utility>
 #include <vector>
 
+#include "komodo_structs.h"
 /**
  * Settings
  */
@@ -1144,7 +1145,7 @@ public:
          std::vector<uint256> commitments,
          std::vector<boost::optional<SproutWitness>>& witnesses,
          uint256 &final_anchor);
-    int ScanForWalletTransactions(CBlockIndex* pindexStart, bool fUpdate = false);
+    int ScanForWalletTransactions(CBlockIndex* pindexStart, bool fUpdate = false, CBlockIndex* pindexFinish = NULL);
     void ReacceptWalletTransactions();
     void ResendWalletTransactions(int64_t nBestBlockTime);
     std::vector<uint256> ResendWalletTransactionsBefore(int64_t nTime);

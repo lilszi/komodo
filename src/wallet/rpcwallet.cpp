@@ -60,6 +60,7 @@
 #include <numeric>
 
 #include "komodo_defs.h"
+#include "komodo_structs.h"
 #include <string.h>
 
 using namespace std;
@@ -217,6 +218,42 @@ UniValue getnewaddress(const UniValue& params, bool fHelp, const CPubKey& mypk)
     return EncodeDestination(keyID);
 }
 
+
+UniValue rescanfromheight(const UniValue& params, bool fHelp, const CPubKey& mypk)
+{
+    if (!EnsureWalletIsAvailable(fHelp))
+        return NullUniValue;
+
+    if (fHelp || params.size() < 1 || params.size() > 2 )
+        throw runtime_error(
+            "rescanfromheight startHeight finishHeight\n"
+            "\nRescans keys in your wallet from a height.\n"
+            "\nArguments:\n"
+            "1. startHeight               (integer, required, default=0) start at block height\n"
+            "2. finishHeight              (integer, optional, default=tip) finish at block height?\n"
+            "\nNote: This call can take minutes to complete for many blocks.\n"
+            "\nExamples:\n"
+            + HelpExampleCli("rescanfromheight", "1280 50000") +
+            "\nAs a JSON-RPC call\n"
+            + HelpExampleRpc("rescanfromheight", "1280 50000")
+        );
+
+    LOCK2(cs_main, pwalletMain->cs_wallet);
+    
+    int32_t startHeight = params[0].get_int();
+    if ( startHeight < 0 || startHeight > chainActive.Height() )
+        throw JSONRPCError(RPC_WALLET_ERROR, "Start height is out of range.");
+    
+    int32_t finishHeight = chainActive.Height();
+    if ( params.size() == 2 )
+        finishHeight = params[1].get_int();
+    if ( finishHeight < 0 || finishHeight > chainActive.Height() )
+        throw JSONRPCError(RPC_WALLET_ERROR, "Finish height is out of range.");
+    
+    pwalletMain->ScanForWalletTransactions(chainActive[startHeight], true, chainActive[finishHeight]);
+    
+    return(0);
+}
 
 CTxDestination GetAccountAddress(std::string strAccount, bool bForceNew=false)
 {
@@ -2831,58 +2868,46 @@ UniValue resendwallettransactions(const UniValue& params, bool fHelp, const CPub
     return result;
 }
 
-UniValue dpowlistunspent(const std::set<CTxDestination> &destinations)
+bool komodo_updateutxocache(CAmount nValue, CTxDestination notaryaddress, CTransaction* txin, int32_t vout);
+int64_t CCgettxout(uint256 txid,int32_t vout,int32_t mempoolflag,int32_t lockflag);
+
+UniValue dpowlistunspent(const UniValue& params, bool fHelp, const CPubKey& mypk)
 {
-    int nMinDepth = 1;
-    int nMaxDepth = 9999999;
-    CAmount value = 10000; // size of KMD utxos to look for.
+    if (fHelp || params.size() < 2)
+        throw runtime_error(
+            "dpowlistunspent satoshies address\n"
+            "Only for Notary Nodes, returns a single utxo of the requested size from the specified address from the utxo cache.\n"
+            );
 
-    assert(pwalletMain != NULL);
-    LOCK2(cs_main, pwalletMain->cs_wallet);
-
+    CAmount value = params[0].get_int();
+    if ( value < 10000 )
+        value = 10000;
+    
+    CTxDestination address;
+    if (!IsValidDestination((address= DecodeDestination(params[1].get_str()))))
+        throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, std::string("Invalid Komodo address: ") + params[1].get_str());
+    
     UniValue results(UniValue::VARR);
-    static vector<COutput> vOutputsSaved;
-    if ( vOutputsSaved.size() == 0 )
+    struct komodo_utxocacheitem utxo;
+    LOCK2(cs_main, pwalletMain->cs_wallet);
+    do 
     {
-        vector<COutput> vecOutputs;
-        pwalletMain->AvailableCoins(vecOutputs, false, NULL, true);
-        BOOST_FOREACH(const COutput& out, vecOutputs)
-        {
-            int nDepth = out.tx->GetDepthInMainChain();
-            if (out.nDepth < nMinDepth || out.nDepth > nMaxDepth)
-                continue;
+        if ( vIguanaUTXOs.size() == 0 && !komodo_updateutxocache(value, address, (CTransaction*)NULL, -1) )
+            return(results);
+        utxo = vIguanaUTXOs[0];
+        vIguanaUTXOs.erase(vIguanaUTXOs.begin());
+    } while ( CCgettxout(utxo.txid, utxo.vout, 0, 0) != value ); // do not check mempool!
+    
+    UniValue entry(UniValue::VOBJ);
+    entry.push_back(Pair("txid", utxo.txid.GetHex()));
+    entry.push_back(Pair("vout", utxo.vout));
+    entry.push_back(Pair("generated", false));
+    entry.push_back(Pair("address", params[1].get_str()));
+    entry.push_back(Pair("amount", ValueFromAmount(value)));
+    entry.push_back(Pair("scriptPubKey", HexStr(utxo.scriptPubKey.begin(), utxo.scriptPubKey.end())));
+    entry.push_back(Pair("spendable", true));
+    results.push_back(entry);
 
-            CTxDestination address;
-            const CScript& scriptPubKey = out.tx->vout[out.i].scriptPubKey;
-            bool fValidAddress = ExtractDestination(scriptPubKey, address);
-
-            if (destinations.size() && (!fValidAddress || !destinations.count(address)))
-                continue;
-
-            CAmount nValue = out.tx->vout[out.i].nValue;
-            if ( nValue != value )
-              continue;
-            vOutputsSaved.push_back(out);
-        }
-    }
-    if ( vOutputsSaved.size() > 0 )
-    {
-        const COutput& out = vOutputsSaved.back();
-        const CScript& pk = out.tx->vout[out.i].scriptPubKey;
-        UniValue entry(UniValue::VOBJ);
-        entry.push_back(Pair("txid", out.tx->GetHash().GetHex()));
-        entry.push_back(Pair("vout", out.i));
-        entry.push_back(Pair("generated", out.tx->IsCoinBase()));
-        CTxDestination address;
-        const CScript& scriptPubKey = out.tx->vout[out.i].scriptPubKey;
-        bool fValidAddress = ExtractDestination(scriptPubKey, address);
-        entry.push_back(Pair("address", EncodeDestination(address)));
-        entry.push_back(Pair("amount", ValueFromAmount(value)));
-        entry.push_back(Pair("scriptPubKey", HexStr(scriptPubKey.begin(), scriptPubKey.end())));
-        entry.push_back(Pair("spendable", out.fSpendable));
-        results.push_back(entry);
-        vOutputsSaved.pop_back();
-    }
     return results;
 }
 
@@ -2956,9 +2981,6 @@ UniValue listunspent(const UniValue& params, bool fHelp, const CPubKey& mypk)
             }
         }
     }
-
-    if ( nMaxDepth == 7777 )
-        return(dpowlistunspent(destinations));
 
     UniValue results(UniValue::VARR);
     vector<COutput> vecOutputs;
@@ -8651,6 +8673,7 @@ static const CRPCCommand commands[] =
     { "wallet",             "getwalletinfo",            &getwalletinfo,            false },
     { "wallet",             "convertpassphrase",        &convertpassphrase,        true  },
     { "wallet",             "importprivkey",            &importprivkey,            true  },
+    { "wallet",             "rescanfromheight",         &rescanfromheight,         true  },
     { "wallet",             "importwallet",             &importwallet,             true  },
     { "wallet",             "importaddress",            &importaddress,            true  },
     { "wallet",             "keypoolrefill",            &keypoolrefill,            true  },
@@ -8662,6 +8685,7 @@ static const CRPCCommand commands[] =
     { "wallet",             "listsinceblock",           &listsinceblock,           false },
     { "wallet",             "listtransactions",         &listtransactions,         false },
     { "wallet",             "listunspent",              &listunspent,              false },
+    { "wallet",             "dpowlistunspent",          &dpowlistunspent,          false },
     { "wallet",             "lockunspent",              &lockunspent,              true  },
     { "wallet",             "move",                     &movecmd,                  false },
     { "wallet",             "sendfrom",                 &sendfrom,                 false },
