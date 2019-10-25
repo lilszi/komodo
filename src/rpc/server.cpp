@@ -331,7 +331,7 @@ static const CRPCCommand vRPCCommands[] =
     { "blockchain",         "gettxoutproof",          &gettxoutproof,          true  },
     { "blockchain",         "verifytxoutproof",       &verifytxoutproof,       true  },
     { "blockchain",         "gettxoutsetinfo",        &gettxoutsetinfo,        true  },
-    { "blockchain",         "getccdisables",         &getccdisables,         true  },
+    { "blockchain",         "getccdisables",          &getccdisables,          true  },
     { "blockchain",         "verifychain",            &verifychain,            true  },
     { "blockchain",         "getspentinfo",           &getspentinfo,           false },
     //{ "blockchain",         "paxprice",               &paxprice,               true  },
