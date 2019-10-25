@@ -1848,18 +1848,18 @@ bool CWallet::AddToWalletIfInvolvingMe(const CTransaction& tx, const CBlock* pbl
         if (fExisted || IsMine(tx) || IsFromMe(tx) || sproutNoteData.size() > 0 || saplingNoteData.size() > 0)
         {
             // wallet filter for notary nodes. Enables by setting -whitelistaddress= as startup param or in conf file (works same as -addnode byut with R-address's)
-            if ( !tx.IsCoinBase() && !NotaryAddress.empty() && (!vWhiteListAddress.empty() || (IS_STAKED_NOTARY != -1 || IS_KOMODO_NOTARY != 0)) ) 
+            if ( !tx.IsCoinBase() && !NotaryAddress.empty() && (!vWhiteListAddress.empty() ) ) // || (IS_STAKED_NOTARY != -1 || IS_KOMODO_NOTARY != 0)) ) 
             {
                 int32_t numvinIsOurs = 0, numvinIsWhiteList = 0;
                 for (size_t i = 0; i < tx.vin.size(); i++)
                 {
                     uint256 hash; CTransaction txin; CTxDestination address;
-                    if ( GetTransaction(tx.vin[i].prevout.hash,txin,hash,false) && ExtractDestination(txin.vout[tx.vin[i].prevout.n].scriptPubKey, address) )
+                    if ( myGetTransaction(tx.vin[i].prevout.hash,txin,hash) && ExtractDestination(txin.vout[tx.vin[i].prevout.n].scriptPubKey, address) )
                     {
                         if ( CBitcoinAddress(address).ToString() == NotaryAddress )
                         {
                             numvinIsOurs++;
-                            komodo_updateutxocache(0, DecodeDestination(NotaryAddress), &txin, tx.vin[i].prevout.n);
+                            //komodo_updateutxocache(0, DecodeDestination(NotaryAddress), &txin, tx.vin[i].prevout.n);
                         }
                         for ( auto wladdr : vWhiteListAddress )
                         {
