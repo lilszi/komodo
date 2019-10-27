@@ -3475,8 +3475,13 @@ bool ConnectBlock(const CBlock& block, CValidationState& state, CBlockIndex* pin
         // if notaries create a notarisation even if its not in this chain it will need to be mined inside its own block! 
         if ( notarisationTx == 1 )
         {
+            int32_t opretOffset = 0;
+            if ( block.vtx[0].vout.back().scriptPubKey.IsOpReturn() )
+            {
+                opretOffset = 1;
+            }
             // Check if the notaries have been paid.
-            if ( block.vtx[0].vout.size() == 1 )
+            if ( block.vtx[0].vout.size() == 1+opretOffset )
                 return state.DoS(100, error("ConnectBlock(): Notaries have not been paid!"),
                                 REJECT_INVALID, "bad-cb-amount");
             // calculate the notaries compensation and validate the amounts and pubkeys are correct.

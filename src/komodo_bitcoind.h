@@ -2096,8 +2096,8 @@ uint64_t komodo_checknotarypay(CBlock *pblock,int32_t height)
     // Check the created coinbase pays the correct notaries.
     BOOST_FOREACH(const CTxOut& txout, pblock->vtx[0].vout)
     {
-        // skip the coinbase paid to the miner.
-        if ( n == 0 ) 
+        // skip the coinbase paid to the miner and the OP_RETURN if it exists. 
+        if ( n == 0 || txout.scriptPubKey.IsOpReturn() )
         {
             n++;
             continue;
@@ -2396,23 +2396,26 @@ int32_t komodo_checkPOW(int32_t slowflag,CBlock *pblock,int32_t height)
     // the default daemon miner, checks the actual vins so the only way this will fail, is if someone changes the miner, 
     // and then creates txs to the crypto address meeting min sigs and puts it in tx position 1.
     // If they go through this effort, the block will still fail at connect block, and will be auto purged by the temp file fix.   
-    if ( failed == 0 && ASSETCHAINS_NOTARY_PAY[0] != 0 && pblock->vtx[0].vout.size() > 1 )
+    if ( failed == 0 && ASSETCHAINS_NOTARY_PAY[0] != 0 )
     {
+        int32_t opretOffset = 0;
+        if ( pblock->vtx[0].vout.size() > 0 && pblock->vtx[0].vout.back().scriptPubKey.IsOpReturn() )
+            opretOffset = 1;
         // We check the full validation in ConnectBlock directly to get the amount for coinbase. So just approx here.
-        if ( slowflag == 0 )
+        if ( slowflag == 0 && pblock->vtx[0].vout.size() > 1+opretOffset && pblock->vtx.size() > 1 )
         {
             // Check the notarisation tx is to the crypto address.
             if ( !komodo_is_notarytx(pblock->vtx[1]) == 1 )
             {
                 fprintf(stderr, "notarisation is not to crypto address ht.%i\n",height);
                 return(-1); 
-            }
+            
             // Check min sigs.
             int8_t numSN = 0; uint8_t notarypubkeys[64][33] = {0};
             numSN = komodo_notaries(notarypubkeys, height, pblock->nTime);
-            if ( pblock->vtx[1].vin.size() < numSN/5 )
-            {
-                fprintf(stderr, "ht.%i does not meet minsigs.%i sigs.%lld\n",height,numSN/5,(long long)pblock->vtx[1].vin.size());
+            if ( pblock->vtx[1].vin.size() < LABSMINSIGS(numSN) )
+            
+                fprintf(stderr, "ht.%i does not meet minsigs.%i sigs.%lld\n",height,LABSMINSIGS(numSN),(long long)pblock->vtx[1].vin.size());
                 return(-1);
             }
         }
