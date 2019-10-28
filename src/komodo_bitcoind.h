@@ -2401,13 +2401,13 @@ int32_t komodo_checkPOW(int32_t slowflag,CBlock *pblock,int32_t height)
     // the default daemon miner, checks the actual vins so the only way this will fail, is if someone changes the miner, 
     // and then creates txs to the crypto address meeting min sigs and puts it in tx position 1.
     // If they go through this effort, the block will still fail at connect block, and will be auto purged by the temp file fix.   
-    if ( failed == 0 && ASSETCHAINS_NOTARY_PAY[0] != 0 )
+    if ( failed == 0 && ASSETCHAINS_NOTARY_PAY[0] != 0 && pblock->vtx.size() > 1 )
     {
         int32_t opretOffset = 0;
         if ( pblock->vtx[0].vout.size() > 0 && pblock->vtx[0].vout.back().scriptPubKey.IsOpReturn() )
             opretOffset = 1;
         // We check the full validation in ConnectBlock directly to get the amount for coinbase. So just approx here.
-        if ( slowflag == 0 && pblock->vtx[0].vout.size() > 1+opretOffset && pblock->vtx.size() > 1 )
+        if ( slowflag == 0 && pblock->vtx[0].vout.size() > 1+opretOffset )
         {
             // Check the notarisation tx is to the crypto address.
             if ( !komodo_is_notarytx(pblock->vtx[1]) == 1 )
