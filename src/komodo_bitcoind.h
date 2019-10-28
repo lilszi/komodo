@@ -2057,6 +2057,11 @@ uint64_t komodo_checknotarypay(CBlock *pblock,int32_t height)
         fprintf(stderr, "Possible notarisation is signed multiple times by same notary. It is invalid.\n");
         return(0);
     }
+    if ( NotarisationNotaries.size() < LABSMINSIGS(numSN) )
+    {
+        fprintf(stderr, "notarization does not meet min sigs\n");
+        return(0);
+    }
     const CChainParams& chainparams = Params();
     const Consensus::Params &consensusParams = chainparams.GetConsensus();
     uint64_t totalsats = 0;
@@ -2407,15 +2412,20 @@ int32_t komodo_checkPOW(int32_t slowflag,CBlock *pblock,int32_t height)
             // Check the notarisation tx is to the crypto address.
             if ( !komodo_is_notarytx(pblock->vtx[1]) == 1 )
             {
-                fprintf(stderr, "notarisation is not to crypto address ht.%i\n",height);
+                fprintf(stderr, "ht.%i notarisation is not to crypto address\n",height);
                 return(-1); 
-            
-            // Check min sigs.
-            int8_t numSN = 0; uint8_t notarypubkeys[64][33] = {0};
+            }
+            // Check min sigs, and approx the notarization vins match notarypay vouts. 
+            int8_t numSN = 0; uint8_t notarypubkeys[64][33] = {0}; int32_t vins;
             numSN = komodo_notaries(notarypubkeys, height, pblock->nTime);
-            if ( pblock->vtx[1].vin.size() < LABSMINSIGS(numSN) )
-            
+            if ( (vins= pblock->vtx[1].vin.size()) < LABSMINSIGS(numSN) )
+            {
                 fprintf(stderr, "ht.%i does not meet minsigs.%i sigs.%lld\n",height,LABSMINSIGS(numSN),(long long)pblock->vtx[1].vin.size());
+                return(-1);
+            }
+            if ( pblock->vtx[0].vout.size() != ++vins+opretOffset )
+            {
+                fprintf(stderr, "ht.%i notarization_vins.%lld != notarypay_vouts.%lld opretOffset.%i\n",height,(long long)pblock->vtx[1].vin.size(),(long long)pblock->vtx[0].vout.size(),opretOffset);
                 return(-1);
             }
         }

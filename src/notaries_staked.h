@@ -4,7 +4,11 @@
 
 #include "crosschain.h"
 #include "cc/CCinclude.h"
-
+/*
+    Leave min sigs as 7 for now...
+    See int32_t LABSMINSIGS(int32_t numSN) in notaries_staked.cpp
+    Simple as adding timestamp, number of pubkeys, and the pubkeys. 
+*/
 static const int32_t iguanaPort = 9333;
 static const int8_t BTCminsigs = 13;
 static const int8_t overrideMinSigs = 7;
@@ -23,10 +27,12 @@ static const char *iguanaSeeds[8][1] =
 static const int STAKED_ERA_GAP = 777;
 
 static const int NUM_STAKED_ERAS = 4;
+// Set timestamp for notary change over in position 1: 
 static const int STAKED_NOTARIES_TIMESTAMP[NUM_STAKED_ERAS] = {1604244444, 1604244444, 1604244444, 1604244444};
-static const int32_t num_notaries_STAKED[NUM_STAKED_ERAS] = { 22, 1, 1, 1 };
+// Set the number of keys in position 2:
+static const int32_t num_notaries_STAKED[NUM_STAKED_ERAS] = { 22, 2, 1, 1 };
 
-// Era array of pubkeys.
+// Place the second era pubkeys in position 2, DO NOT TOUCH era one keys!: 
 static const char *notaries_STAKED[NUM_STAKED_ERAS][64][2] =
 {
     {
@@ -54,7 +60,8 @@ static const char *notaries_STAKED[NUM_STAKED_ERAS][64][2] =
         {"Exile13", "0247b2120a39faf83678b5de6883e039180ff42925bcb298d32f3792cd59001aae" }, // RTDJ3CDZ6ANbeDKab8nqTVrGw7ViAKLeDV       right
     },
     {
-        {"blackjok3r", "021914947402d936a89fbdd1b12be49eb894a1568e5e17bb18c8a6cffbd3dc106e" }, // RTVti13NP4eeeZaCCmQxc2bnPdHxCJFP9x
+        {"blackjok3r", "02845972bb975618ade8b402af3e34753dde3f51213e4c8c8650fdc8f7f114ef73" }, // RWoRM5pf5pwBYwctG3g8Tg4pg5CgXV6bkd    right
+        {"Alright", "02b718c60a035f77b7103a507d36aed942b4f655b8d13bce6f28b8eac523944278" }, //RG77F4mQpP1K1q2CDSc2vZSJvKUZgF8R26
     },
     {
         {"blackjok3r", "021914947402d936a89fbdd1b12be49eb894a1568e5e17bb18c8a6cffbd3dc106e" }, // RTVti13NP4eeeZaCCmQxc2bnPdHxCJFP9x
