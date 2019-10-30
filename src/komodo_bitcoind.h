@@ -1375,7 +1375,7 @@ int8_t komodo_segid(int32_t nocache,int32_t height)
                         pindex->segid = segid;
                         //fprintf(stderr,"komodo_segid.(%d) -> %d\n",height,pindex->segid);
                     }
-                } else fprintf(stderr,"komodo_segid ht.%d couldnt extract voutaddress\n",height);
+                } //else fprintf(stderr,"komodo_segid ht.%d couldnt extract voutaddress\n",height);
             }
         }
     }
