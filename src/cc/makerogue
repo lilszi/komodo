@@ -31,8 +31,6 @@ fi
 
 if make -f Makefile_rogue "$@"; then
   echo ROGUE BUILD SUCCESSFUL
-  rm ../libcc.so
-  cp librogue.so ../libcc.so
 else
   echo ROGUE BUILD FAILED
   exit 1
