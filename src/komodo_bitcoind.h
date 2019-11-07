@@ -1344,6 +1344,8 @@ uint64_t komodo_commission(const CBlock *pblock,int32_t height)
     return(commission);
 }
 
+static int32_t firstblockseen = 0;
+
 uint32_t komodo_segid32(char *coinaddr)
 {
     bits256 addrhash;
@@ -1353,7 +1355,7 @@ uint32_t komodo_segid32(char *coinaddr)
 
 int8_t komodo_segid(int32_t nocache,int32_t height)
 {
-    CTxDestination voutaddress; CBlock block; CBlockIndex *pindex; uint64_t value; uint32_t txtime; char voutaddr[64],destaddr[64]; int32_t txn_count,vout; uint256 txid; CScript opret; int8_t segid = -1;
+    CTxDestination voutaddress; CBlock block; CBlockIndex *pindex,*blockone; uint64_t value; uint32_t txtime; char voutaddr[64],destaddr[64]; int32_t txn_count,vout; uint256 txid; CScript opret; int8_t segid = -1;
     if ( height > 0 && (pindex= komodo_chainactive(height)) != 0 )
     {
         if ( nocache == 0 && pindex->segid >= -1 )
@@ -1372,20 +1374,37 @@ int8_t komodo_segid(int32_t nocache,int32_t height)
                     if ( strcmp(destaddr,voutaddr) == 0 && block.vtx[txn_count-1].vout[0].nValue == value )
                     {
                         segid = komodo_segid32(voutaddr) & 0x3f;
-                        pindex->segid = segid;
+                        if ( firstblockseen < 0 && height > 1 )
+                            pindex->segid = segid;
                         //fprintf(stderr,"komodo_segid.(%d) -> %d\n",height,pindex->segid);
                     }
                 } //else fprintf(stderr,"komodo_segid ht.%d couldnt extract voutaddress\n",height);
             }
         }
-    }
+        if ( firstblockseen > 0 && height > 1 )
+            pindex->segid = segid; // sets PoW/PoS and segid, LABS is saved in blockindex, if we started syncing under block 100 use the new cache. 
+    } 
     return(segid);
 }
 
 void komodo_segids(uint8_t *hashbuf,int32_t height,int32_t n)
 {
     static uint8_t prevhashbuf[100]; static int32_t prevheight;
-    int32_t i;
+    int32_t i,ht=height+101; CBlockIndex *blockone; 
+    if ( firstblockseen == 0 && (blockone= komodo_chainactive(1)) != 0 )
+    {
+        if ( ht > 2 && blockone->segid == -3 ) // we have seen the first block so use new index
+            firstblockseen++;
+        else if ( ht < 100 ) // we can set the first block, all blocks will use new system from now on even after restart, 
+        {
+            blockone->segid = -3;
+            FlushStateToDisk();
+            firstblockseen++;
+        }
+        else if ( ht >= 100 && blockone->segid != -3 ) // we have not seen the first block use old no cache system.
+            firstblockseen--;
+        fprintf(stderr, "ht.%i set firstblockseen to %i nocache.%i\n", ht, firstblockseen, (firstblockseen<0));
+    }
     if ( height == prevheight && n == 100 )
         memcpy(hashbuf,prevhashbuf,100);
     else
@@ -1393,7 +1412,7 @@ void komodo_segids(uint8_t *hashbuf,int32_t height,int32_t n)
         memset(hashbuf,0xff,n);
         for (i=0; i<n; i++)
         {
-            hashbuf[i] = (uint8_t)komodo_segid(1,height+i);
+            hashbuf[i] = (uint8_t)komodo_segid((firstblockseen<0),height+i);
             //fprintf(stderr,"%02x ",hashbuf[i]);
         }
         if ( n == 100 )
@@ -1700,16 +1719,16 @@ int32_t komodo_is_PoSblock(int32_t slowflag,int32_t height,CBlock *pblock,arith_
             {
                 if ( 0 && ASSETCHAINS_STAKED < 100 )
                     fprintf(stderr,"komodo_is_PoSblock PoS failure ht.%d eligible.%u vs blocktime.%u, lag.%d -> check to see if it is PoW block\n",height,eligible,(uint32_t)pblock->nTime,(int32_t)(eligible - pblock->nTime));
-                if ( pindex != 0 )
+                /* if ( pindex != 0 )
                 {
                     pindex->segid = -1;
                     //fprintf(stderr,"PoW block detected set segid.%d <- %d\n",height,pindex->segid);
-                }
+                } */
             }
             else
             {
                 isPoS = 2; // 2 means staking utxo validated
-                CTxDestination voutaddress; char voutaddr[64];
+                /*CTxDestination voutaddress; char voutaddr[64];
                 if ( ExtractDestination(pblock->vtx[txn_count-1].vout[0].scriptPubKey,voutaddress) )
                 {
                     strcpy(voutaddr,CBitcoinAddress(voutaddress).ToString().c_str());
@@ -1719,7 +1738,7 @@ int32_t komodo_is_PoSblock(int32_t slowflag,int32_t height,CBlock *pblock,arith_
                 {
                     pindex->segid = segid;
                     //fprintf(stderr,"PoS block set segid.%d <- %d\n",height,pindex->segid);
-                } //else fprintf(stderr,"unexpected null pindex for slowflag set ht.%d segid.%d:%d\n",height,pindex!=0?pindex->segid:-3,segid);
+                } //else fprintf(stderr,"unexpected null pindex for slowflag set ht.%d segid.%d:%d\n",height,pindex!=0?pindex->segid:-3,segid); */
             }
         } 
         else if ( slowflag == 0 ) // previous blocks are not seen yet, do the best approx
@@ -2349,13 +2368,13 @@ int32_t komodo_checkPOW(int32_t slowflag,CBlock *pblock,int32_t height)
                 else
                 {
                     failed = 0; 
-                    CBlockIndex *pindex; 
+                    /*CBlockIndex *pindex; 
                     BlockMap::const_iterator it = mapBlockIndex.find(pblock->GetHash());
                     pindex = it != mapBlockIndex.end() ? it->second : NULL;
                     if ( pindex != 0 && pindex->segid == -2 ) {
                         pindex->segid = -1;
                         //fprintf(stderr,"PoW block detected set segid.%d <- %d\n",height,pindex->segid);
-                    }
+                    } */
                 }
             }
         }
