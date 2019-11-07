@@ -393,8 +393,8 @@ UniValue getwalletfilterstatus(const UniValue& params, bool fHelp, const CPubKey
             "  ,...\n"
             "]\n"
             "\nExamples:\n"
-            + HelpExampleCli("getwalletfilterstatus")
-            + HelpExampleRpc("getwalletfilterstatus")
+            + HelpExampleCli("getwalletfilterstatus","")
+            + HelpExampleRpc("getwalletfilterstatus","")
         );
     LOCK2(cs_main, pwalletMain->cs_wallet);
     UniValue ret(UniValue::VOBJ); UniValue addresses(UniValue::VARR);
