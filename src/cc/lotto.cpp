@@ -337,5 +337,3 @@ std::string LottoWinner(uint64_t txfee)
     }
     return("");
 }
-
-

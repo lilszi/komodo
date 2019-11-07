@@ -17,7 +17,7 @@
 #include "asn/Fulfillment.h"
 #include "asn/EvalFulfillment.h"
 #include "asn/OCTET_STRING.h"
-#include "cryptoconditions.h"
+#include "../include/cryptoconditions.h"
 #include "internal.h"
 #include "include/cJSON.h"
 

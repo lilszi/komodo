@@ -1755,11 +1755,6 @@ struct komodo_utxocacheitem komodo_cacheitem(uint256 txid, int32_t vout, CScript
     return(utxo);
 }
 
-bool komodo_cmputxocacheitems(const struct komodo_utxocacheitem& utxoin, const struct komodo_utxocacheitem& utxoout)
-{
-    return(utxoin.txid == utxoout.txid && utxoin.vout == utxoout.vout && utxoin.scriptPubKey == utxoout.scriptPubKey);
-}
-
 bool komodo_updateutxocache(CAmount nValue, CTxDestination notaryaddress, CTransaction* txin, int32_t vout)
 {
     static CAmount value = 0; int32_t i;
@@ -1770,19 +1765,6 @@ bool komodo_updateutxocache(CAmount nValue, CTxDestination notaryaddress, CTrans
     if ( value == 0 )
         return(false);
     
-    if ( nValue == 0 && vout > -1 && txin != NULL )
-    {
-        struct komodo_utxocacheitem delutxo = komodo_cacheitem(txin->GetHash(), vout, txin->vout[vout].scriptPubKey);
-        for (i = 0; i < vIguanaUTXOs.size(); i++) 
-        {
-            if ( komodo_cmputxocacheitems(vIguanaUTXOs[i], delutxo) )
-            {
-                vIguanaUTXOs.erase(vIguanaUTXOs.begin()+i);
-                LogPrintf("removed %s/%i from utxo cache", delutxo.txid.GetHex().c_str(), delutxo.vout);
-                break;
-            }
-        }
-    }
     if ( vIguanaUTXOs.size() == 0 ) 
     {
         vector<COutput> vecOutputs;
@@ -1872,7 +1854,8 @@ bool CWallet::AddToWalletIfInvolvingMe(const CTransaction& tx, const CBlock* pbl
                     }
                 }
                 // Now we know if it was a tx sent to us, by either a whitelisted address, or ourself.
-                if ( 0 && numvinIsOurs > 0 )
+                if ( 0 && numvinIsOurs != 0 )
+
                     fprintf(stderr, "We sent from address: %s vins: %d\n",NotaryAddress.c_str(),numvinIsOurs);
                 if ( !vWhiteListAddress.empty() && numvinIsOurs == 0 && numvinIsWhiteList == 0 )
                     return false;
@@ -4247,6 +4230,7 @@ bool CWallet::CommitTransaction(CWalletTx& wtxNew, CReserveKey& reservekey)
             // Broadcast
             if (!wtxNew.AcceptToMemoryPool(false))
             {
+                // fprintf(stderr,"commit failed\n");
                 // This must not fail. The transaction has already been signed and recorded.
                 LogPrintf("CommitTransaction(): Error: Transaction not valid\n");
                 return false;

@@ -4,7 +4,11 @@
 
 #include "crosschain.h"
 #include "cc/CCinclude.h"
-
+/*
+    Leave min sigs as 7 for now...
+    See int32_t LABSMINSIGS(int32_t numSN) in notaries_staked.cpp
+    Simple as adding timestamp, number of pubkeys, and the pubkeys. 
+*/
 static const int32_t iguanaPort = 9333;
 static const int8_t BTCminsigs = 13;
 static const int8_t overrideMinSigs = 7;
@@ -28,7 +32,7 @@ static const int STAKED_NOTARIES_TIMESTAMP[NUM_STAKED_ERAS] = {1572523200, 17042
 // Set the number of keys in position 2:
 static const int32_t num_notaries_STAKED[NUM_STAKED_ERAS] = { 22, 24, 1, 1 };
 
-// Era array of pubkeys.
+// Place the second era pubkeys in position 2, DO NOT TOUCH era one keys!: 
 static const char *notaries_STAKED[NUM_STAKED_ERAS][64][2] =
 {
     {
@@ -94,6 +98,7 @@ int32_t STAKED_era(int timestamp);
 int8_t numStakedNotaries(uint8_t pubkeys[64][33],int8_t era);
 int8_t StakedNotaryID(std::string &notaryname, char *Raddress);
 void UpdateNotaryAddrs(uint8_t pubkeys[64][33],int8_t numNotaries);
+int32_t LABSMINSIGS(int32_t numSN);
 
 CrosschainAuthority Choose_auth_STAKED(int32_t chosen_era);
 

@@ -22,7 +22,7 @@
 #include "include/cJSON.h"
 #include "include/sha256.h"
 #include "asn/asn_application.h"
-#include "cryptoconditions.h"
+#include "../include/cryptoconditions.h"
 #include "internal.h"
 
 
@@ -301,5 +301,3 @@ int jsonGetHexOptional(const cJSON *params, char *key, char *err, unsigned char 
     }
     return checkDecodeHex(item, key, err, data, size);
 }
-
-

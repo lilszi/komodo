@@ -271,7 +271,7 @@ UniValue migrate_createburntransaction(const UniValue& params, bool fHelp, const
 
     // if -pubkey not set it sends change to null pubkey. 
     // we need a better way to return errors from this function!
-    if (ensure_CCrequirements(225) < 0)
+    if (ensure_CCrequirements(226) < 0)
         throw runtime_error("You need to set -pubkey, or run setpukbey RPC, or imports are disabled on this chain.");
 
     string targetSymbol = params[0].get_str();
