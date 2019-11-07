@@ -288,14 +288,14 @@ UniValue removewhitelistaddress(const UniValue& params, bool fHelp)
     if (fHelp || params.size() == 0)
         throw runtime_error(
             "removewhitelistaddress \"address1\" \"address2\" \"addressn\"\n"
-            "\nRemoves an" + strprintf("%s",komodo_chainname()) + " address from the whitelist walletfilter.\n"
+            "\nRemoves an " + strprintf("%s",komodo_chainname()) + " address from the whitelist walletfilter.\n"
             "\nArguments:\n"
             "1. \"address1\"        (string) A valid komodo R address.\n"
             "\nResult:\n"
             "\"number of valid addresses removed\n"
             "\nExamples:\n"
-            + HelpExampleCli("addwhitelistaddress", "RD6GgnrMpPaTSMn8vai6yiGA7mN4QGPV")
-            + HelpExampleRpc("addwhitelistaddress", "RD6GgnrMpPaTSMn8vai6yiGA7mN4QGPV")
+            + HelpExampleCli("removewhitelistaddress", "RD6GgnrMpPaTSMn8vai6yiGA7mN4QGPV")
+            + HelpExampleRpc("removewhitelistaddress", "RD6GgnrMpPaTSMn8vai6yiGA7mN4QGPV")
         );
 
     LOCK2(cs_main, pwalletMain->cs_wallet);
@@ -370,8 +370,8 @@ UniValue getwalletfilterstatus(const UniValue& params, bool fHelp)
             "  ,...\n"
             "]\n"
             "\nExamples:\n"
-            + HelpExampleCli("setwalletfilter", "true")
-            + HelpExampleRpc("setwalletfilter", "false")
+            + HelpExampleCli("getwalletfilterstatus")
+            + HelpExampleRpc("getwalletfilterstatus")
         );
     LOCK2(cs_main, pwalletMain->cs_wallet);
     UniValue ret(UniValue::VOBJ); UniValue addresses(UniValue::VARR);
