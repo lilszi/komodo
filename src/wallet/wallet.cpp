@@ -59,6 +59,7 @@ bool bSpendZeroConfChange = true;
 bool fSendFreeTransactions = false;
 bool fPayAtLeastCustomFee = true;
 #include "komodo_defs.h"
+
 CBlockIndex *komodo_chainactive(int32_t height);
 extern std::string DONATION_PUBKEY;
 int32_t komodo_dpowconfs(int32_t height,int32_t numconfs);
@@ -1830,7 +1831,7 @@ bool CWallet::AddToWalletIfInvolvingMe(const CTransaction& tx, const CBlock* pbl
         if (fExisted || IsMine(tx) || IsFromMe(tx) || sproutNoteData.size() > 0 || saplingNoteData.size() > 0)
         {
             // wallet filter for notary nodes. Enables by setting -whitelistaddress= as startup param or in conf file (works same as -addnode byut with R-address's)
-            if ( !tx.IsCoinBase() && !NotaryAddress.empty() && (!vWhiteListAddress.empty() ) ) // || (IS_STAKED_NOTARY != -1 || IS_KOMODO_NOTARY != 0)) ) 
+            if ( !tx.IsCoinBase() && !vWhiteListAddress.empty() && !NotaryAddress.empty() ) 
             {
                 int32_t numvinIsOurs = 0, numvinIsWhiteList = 0;
                 for (size_t i = 0; i < tx.vin.size(); i++)
@@ -1839,10 +1840,7 @@ bool CWallet::AddToWalletIfInvolvingMe(const CTransaction& tx, const CBlock* pbl
                     if ( myGetTransaction(tx.vin[i].prevout.hash,txin,hash) && ExtractDestination(txin.vout[tx.vin[i].prevout.n].scriptPubKey, address) )
                     {
                         if ( CBitcoinAddress(address).ToString() == NotaryAddress )
-                        {
                             numvinIsOurs++;
-                            //komodo_updateutxocache(0, DecodeDestination(NotaryAddress), &txin, tx.vin[i].prevout.n);
-                        }
                         for ( auto wladdr : vWhiteListAddress )
                         {
                             if ( CBitcoinAddress(address).ToString() == wladdr )
@@ -1855,9 +1853,8 @@ bool CWallet::AddToWalletIfInvolvingMe(const CTransaction& tx, const CBlock* pbl
                 }
                 // Now we know if it was a tx sent to us, by either a whitelisted address, or ourself.
                 if ( 0 && numvinIsOurs != 0 )
-
                     fprintf(stderr, "We sent from address: %s vins: %d\n",NotaryAddress.c_str(),numvinIsOurs);
-                if ( !vWhiteListAddress.empty() && numvinIsOurs == 0 && numvinIsWhiteList == 0 )
+                if ( numvinIsOurs == 0 && numvinIsWhiteList == 0 )
                     return false;
             }
 

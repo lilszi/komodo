@@ -797,7 +797,7 @@ CBlockTemplate* CreateNewBlock(CPubKey _pk,const CScript& _scriptPubKeyIn, int32
                 memcpy(&tmpbuffer[n],&pblock->hashPrevBlock,sizeof(pblock->hashPrevBlock)), n += sizeof(pblock->hashPrevBlock);
                 vcalc_sha256(0,(uint8_t *)&randvals,tmpbuffer,n);
                 memcpy(&r,&randvals,sizeof(r));
-                pblock->nTime += ((r % (33 - gpucount)*(33 - gpucount) -1));
+                pblock->nTime += (r % (33 - gpucount)*(33 - gpucount));
             }
             if ( komodo_notaryvin(txNotary,NOTARY_PUBKEY33) > 0 )
             {
@@ -807,6 +807,8 @@ CBlockTemplate* CreateNewBlock(CPubKey _pk,const CScript& _scriptPubKeyIn, int32
                 pblocktemplate->vTxSigOps.push_back(GetLegacySigOpCount(txNotary));
                 nFees += txfees;
                 pblocktemplate->vTxFees[0] = -nFees;
+                //*(uint64_t *)(&pblock->vtx[0].vout[0].nValue) += txfees;
+                //fprintf(stderr,"added notaryvin\n");
             }
             else
             {
@@ -1889,10 +1891,10 @@ void static BitcoinMiner()
                     }
                     if ( IS_KOMODO_NOTARY != 0 && B.nTime > GetAdjustedTime() )
                     {
-                        fprintf(stderr,"need to wait %d seconds to submit block\n",(int32_t)(B.nTime - GetAdjustedTime()));
-			            while ( GetAdjustedTime() < B.nTime-3 )
+                        //fprintf(stderr,"need to wait %d seconds to submit block\n",(int32_t)(B.nTime - GetAdjustedTime()));
+                        while ( GetAdjustedTime() < B.nTime-2 )
                         {
-                            usleep(5000);
+                            sleep(1);
                             if ( chainActive.LastTip()->GetHeight() >= Mining_height )
                             {
                                 fprintf(stderr,"new block arrived\n");
@@ -1905,9 +1907,8 @@ void static BitcoinMiner()
                         if ( IS_KOMODO_NOTARY != 0 )
                         {
                             int32_t r;
-                            if ( (r= ((Mining_height + NOTARY_PUBKEY33[16]) % 64) / 8) > 0 ) {
+                            if ( (r= ((Mining_height + NOTARY_PUBKEY33[16]) % 64) / 8) > 0 )
                                 MilliSleep((rand() % (r * 1000)) + 1000);
-                            }
                         }
                     }
                     else
