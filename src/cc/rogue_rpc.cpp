@@ -1463,10 +1463,10 @@ UniValue rogue_games(uint64_t txfee,struct CCcontract_info *cp,cJSON *params)
     for (std::vector<uint256>::const_iterator it=txids.begin(); it!=txids.end(); it++)
     //for (std::vector<std::pair<CAddressUnspentKey, CAddressUnspentValue> >::const_iterator it=unspentOutputs.begin(); it!=unspentOutputs.end(); it++)
     {
-        txid = *it; //->first;
-        //vout = (int32_t)it-first.index;
+        txid = it->first.txhash;
+        vout = (int32_t)it->first.index;
         //char str[65]; fprintf(stderr,"%s check %s/v%d %.8f\n",coinaddr,uint256_str(str,txid),vout,(double)it->second.satoshis/COIN);
-        //if ( vout == 0 )
+        if ( vout == 0 )
         {
             if ( myGetTransaction(txid,tx,hashBlock) != 0 && (numvouts= tx.vout.size()) > 1 )
             {
