@@ -178,7 +178,7 @@ int32_t komodo_waituntilelegible(uint32_t blocktime, int32_t stakeHeight, uint32
         }
         if( !GetBoolArg("-gen",false) ) 
             return(0);
-        usleep(5000);
+        sleep(1);
         adjustedtime = (int64_t)GetAdjustedTime();
     } 
     return(1);
