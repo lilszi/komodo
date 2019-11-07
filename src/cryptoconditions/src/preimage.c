@@ -18,7 +18,7 @@
 #include "asn/OCTET_STRING.h"
 #include "include/cJSON.h"
 #include "include/sha256.h"
-#include "cryptoconditions.h"
+#include "../include/cryptoconditions.h"
 
 
 struct CCType CC_PreimageType;

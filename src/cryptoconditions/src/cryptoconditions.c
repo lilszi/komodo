@@ -17,7 +17,7 @@
 #include "asn/Condition.h"
 #include "asn/Fulfillment.h"
 #include "asn/OCTET_STRING.h"
-#include "cryptoconditions.h"
+#include "../include/cryptoconditions.h"
 #include "src/internal.h"
 #include "src/threshold.c"
 #include "src/prefix.c"
@@ -344,5 +344,3 @@ void cc_free(CC *cond) {
         cond->type->free(cond);
     free(cond);
 }
-
-

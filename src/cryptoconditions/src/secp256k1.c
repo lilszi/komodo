@@ -31,7 +31,7 @@
 #include "asn/OCTET_STRING.h"
 #include "include/cJSON.h"
 #include "include/secp256k1/include/secp256k1.h"
-#include "cryptoconditions.h"
+#include "../include/cryptoconditions.h"
 #include "internal.h"
 
 
