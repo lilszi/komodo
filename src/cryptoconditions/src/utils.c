@@ -19,10 +19,10 @@
 #include <string.h>
 #include <ctype.h>
 
-#include "include/cJSON.h"
+//#include "include/cJSON.h"
+#include "../include/cryptoconditions.h"
 #include "include/sha256.h"
 #include "asn/asn_application.h"
-#include "../include/cryptoconditions.h"
 #include "internal.h"
 
 
