@@ -20,7 +20,7 @@
 #include <ctype.h>
 
 //#include "include/cJSON.h"
-#include "../include/cryptoconditions.h"
+//#include "../include/cryptoconditions.h"
 #include "include/sha256.h"
 #include "asn/asn_application.h"
 #include "internal.h"

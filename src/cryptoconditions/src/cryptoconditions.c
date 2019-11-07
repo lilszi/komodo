@@ -27,7 +27,7 @@
 #include "anon.c"
 #include "eval.c"
 #include "json_rpc.c"
-#include <cJSON.h>
+#include "include/cJSON.h"
 
 #include <stdlib.h>
 
