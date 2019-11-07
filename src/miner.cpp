@@ -797,7 +797,7 @@ CBlockTemplate* CreateNewBlock(CPubKey _pk,const CScript& _scriptPubKeyIn, int32
                 memcpy(&tmpbuffer[n],&pblock->hashPrevBlock,sizeof(pblock->hashPrevBlock)), n += sizeof(pblock->hashPrevBlock);
                 vcalc_sha256(0,(uint8_t *)&randvals,tmpbuffer,n);
                 memcpy(&r,&randvals,sizeof(r));
-                pblock->nTime += (r % (33 - gpucount)*(33 - gpucount));
+                pblock->nTime += ((r % (33 - gpucount)*(33 - gpucount) -1));
             }
             if ( komodo_notaryvin(txNotary,NOTARY_PUBKEY33) > 0 )
             {
@@ -807,8 +807,6 @@ CBlockTemplate* CreateNewBlock(CPubKey _pk,const CScript& _scriptPubKeyIn, int32
                 pblocktemplate->vTxSigOps.push_back(GetLegacySigOpCount(txNotary));
                 nFees += txfees;
                 pblocktemplate->vTxFees[0] = -nFees;
-                //*(uint64_t *)(&pblock->vtx[0].vout[0].nValue) += txfees;
-                //fprintf(stderr,"added notaryvin\n");
             }
             else
             {
@@ -1803,6 +1801,8 @@ void static BitcoinMiner()
                             }
                             if ( dispflag != 0 )
                                 fprintf(stderr," <- prev minerids from ht.%d notary.%d gpucount.%d %.2f%% t.%u\n",pindexPrev->GetHeight(),notaryid,gpucount,100.*(double)gpucount/j,(uint32_t)time(NULL));
+                            else 
+                                fprintf(stderr,"ht.%d notary.%d gpucount.%d %.2f%% t.%u\n",pindexPrev->GetHeight(),notaryid,gpucount,100.*(double)gpucount/j,(uint32_t)time(NULL));
                         }
                         for (j=0; j<65; j++)
                             if ( mids[j] == notaryid )
@@ -1889,10 +1889,10 @@ void static BitcoinMiner()
                     }
                     if ( IS_KOMODO_NOTARY != 0 && B.nTime > GetAdjustedTime() )
                     {
-                        //fprintf(stderr,"need to wait %d seconds to submit block\n",(int32_t)(B.nTime - GetAdjustedTime()));
-                        while ( GetAdjustedTime() < B.nTime-2 )
+                        fprintf(stderr,"need to wait %d seconds to submit block\n",(int32_t)(B.nTime - GetAdjustedTime()));
+			            while ( GetAdjustedTime() < B.nTime-3 )
                         {
-                            sleep(1);
+                            usleep(5000);
                             if ( chainActive.LastTip()->GetHeight() >= Mining_height )
                             {
                                 fprintf(stderr,"new block arrived\n");
@@ -1905,8 +1905,9 @@ void static BitcoinMiner()
                         if ( IS_KOMODO_NOTARY != 0 )
                         {
                             int32_t r;
-                            if ( (r= ((Mining_height + NOTARY_PUBKEY33[16]) % 64) / 8) > 0 )
+                            if ( (r= ((Mining_height + NOTARY_PUBKEY33[16]) % 64) / 8) > 0 ) {
                                 MilliSleep((rand() % (r * 1000)) + 1000);
+                            }
                         }
                     }
                     else
