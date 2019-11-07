@@ -29,9 +29,6 @@
 #include "json_rpc.c"
 #include "include/cJSON.h"
 
-#include <stdlib.h>
-
-
 struct CCType *CCTypeRegistry[] = {
     &CC_PreimageType,
     &CC_PrefixType,

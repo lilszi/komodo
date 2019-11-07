@@ -19,12 +19,11 @@
 #include <string.h>
 #include <ctype.h>
 
-//#include "include/cJSON.h"
-//#include "../include/cryptoconditions.h"
+#include "include/cJSON.h"
+#include "../include/cryptoconditions.h"
 #include "include/sha256.h"
 #include "asn/asn_application.h"
 #include "internal.h"
-
 
 static unsigned char encoding_table[] = {'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H',
                                 'I', 'J', 'K', 'L', 'M', 'N', 'O', 'P',
