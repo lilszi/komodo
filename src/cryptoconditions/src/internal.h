@@ -13,8 +13,8 @@
  *                                                                            *
  ******************************************************************************/
 
-#include <Condition.h>
-#include <Fulfillment.h>
+#include "include/Condition.h"
+#include "include/Fulfillment.h"
 #include "include/cJSON.h"
 #include "asn/asn_application.h"
 #include "../include/cryptoconditions.h"
