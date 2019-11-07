@@ -164,12 +164,12 @@ bool komodo_appendACscriptpub();
 int32_t komodo_waituntilelegible(uint32_t blocktime, int32_t stakeHeight, uint32_t delay)
 {
     int64_t adjustedtime = (int64_t)GetAdjustedTime();
-    while ( (int64_t)blocktime-ASSETCHAINS_STAKED_BLOCK_FUTURE_MAX > adjustedtime )
+    while ( (int64_t)blocktime-57 > adjustedtime )
     {
-        int64_t secToElegible = (int64_t)blocktime-ASSETCHAINS_STAKED_BLOCK_FUTURE_MAX-adjustedtime;
-        if ( delay <= ASSETCHAINS_STAKED_BLOCK_FUTURE_HALF && secToElegible <= ASSETCHAINS_STAKED_BLOCK_FUTURE_HALF )
+        int64_t secToElegible = (int64_t)blocktime-57-adjustedtime;
+        if ( delay <= 27 && secToElegible <= 27 )
             break;
-        if ( (rand() % 100) < 2-(secToElegible>ASSETCHAINS_STAKED_BLOCK_FUTURE_MAX) ) 
+        if ( (rand() % 100) < 2-(secToElegible>57) ) 
             fprintf(stderr, "[%s:%i] %llds until elegible...\n", ASSETCHAINS_SYMBOL, stakeHeight, (long long)secToElegible);
         if ( chainActive.LastTip()->GetHeight() >= stakeHeight )
         {
@@ -626,8 +626,7 @@ CBlockTemplate* CreateNewBlock(CPubKey _pk,const CScript& _scriptPubKeyIn, int32
                 blocktime = GetAdjustedTime();
                 siglen = komodo_staked(txStaked, pblock->nBits, &blocktime, &txtime, &utxotxid, &utxovout, &utxovalue, utxosig);
                 
-                uint32_t delay = ASSETCHAINS_ALGO != ASSETCHAINS_EQUIHASH ? ASSETCHAINS_STAKED_BLOCK_FUTURE_MAX : ASSETCHAINS_STAKED_BLOCK_FUTURE_HALF;
-                if ( komodo_waituntilelegible(blocktime, stakeHeight, delay) == 0 )
+                if ( komodo_waituntilelegible(blocktime, stakeHeight, (ASSETCHAINS_ALGO!=ASSETCHAINS_EQUIHASH?57:27)) == 0 )
                     return(0);
             }
 
@@ -1923,19 +1922,10 @@ void static BitcoinMiner()
                                 MilliSleep((rand() % (r * 1000)) + 1000);
                         }
                     }
-                    else
+                    else if ( KOMODO_MININGTHREADS == 0 )
                     {
-                        if ( KOMODO_MININGTHREADS == 0 ) // we are staking 
-                        {
-                            // Need to rebuild block if the found solution for PoS, meets POW target, otherwise it will be rejected. 
-                            if ( ASSETCHAINS_STAKED < 100 && komodo_newStakerActive(Mining_height,pblock->nTime) != 0 && h < hashTarget_POW )
-                            {
-                                fprintf(stderr, "[%s:%d] PoS block.%u meets POW_Target.%u building new block\n", ASSETCHAINS_SYMBOL, Mining_height, h.GetCompact(), hashTarget_POW.GetCompact());
-                                return(false);
-                            }
-                            if ( komodo_waituntilelegible(B.nTime, Mining_height, ASSETCHAINS_STAKED_BLOCK_FUTURE_MAX) == 0 )
-                                return(false);
-                        }
+                        if ( komodo_waituntilelegible(B.nTime, Mining_height, 57) == 0 )
+                            return(false);
                         uint256 tmp = B.GetHash();
                         fprintf(stderr,"[%s:%d] mined block ",ASSETCHAINS_SYMBOL,Mining_height);
                         int32_t z; for (z=31; z>=0; z--)
