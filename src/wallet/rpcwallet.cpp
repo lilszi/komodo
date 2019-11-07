@@ -255,7 +255,7 @@ void komodo_dumpwalletfilter()
     out.close();
 }
 
-UniValue addwhitelistaddress(const UniValue& params, bool fHelp)
+UniValue addwhitelistaddress(const UniValue& params, bool fHelp, const CPubKey& mypk)
 {
     if (!EnsureWalletIsAvailable(fHelp))
         return NullUniValue;
@@ -303,7 +303,7 @@ UniValue addwhitelistaddress(const UniValue& params, bool fHelp)
     return n;
 }
 
-UniValue removewhitelistaddress(const UniValue& params, bool fHelp)
+UniValue removewhitelistaddress(const UniValue& params, bool fHelp, const CPubKey& mypk)
 {
     if (!EnsureWalletIsAvailable(fHelp))
         return NullUniValue;
@@ -350,7 +350,7 @@ UniValue removewhitelistaddress(const UniValue& params, bool fHelp)
     return total;
 }
 
-UniValue setwalletfilter(const UniValue& params, bool fHelp)
+UniValue setwalletfilter(const UniValue& params, bool fHelp, const CPubKey& mypk)
 {
     if (fHelp || params.size() != 1)
         throw runtime_error(
@@ -380,7 +380,7 @@ UniValue setwalletfilter(const UniValue& params, bool fHelp)
     return 0;
 }
 
-UniValue getwalletfilterstatus(const UniValue& params, bool fHelp)
+UniValue getwalletfilterstatus(const UniValue& params, bool fHelp, const CPubKey& mypk)
 {
     if (fHelp || params.size() != 0)
         throw runtime_error(
@@ -393,8 +393,8 @@ UniValue getwalletfilterstatus(const UniValue& params, bool fHelp)
             "  ,...\n"
             "]\n"
             "\nExamples:\n"
-            + HelpExampleCli("getwalletfilterstatus")
-            + HelpExampleRpc("getwalletfilterstatus")
+            + HelpExampleCli("getwalletfilterstatus","")
+            + HelpExampleRpc("getwalletfilterstatus","")
         );
     LOCK2(cs_main, pwalletMain->cs_wallet);
     UniValue ret(UniValue::VOBJ); UniValue addresses(UniValue::VARR);
@@ -416,42 +416,6 @@ UniValue getwalletfilterstatus(const UniValue& params, bool fHelp)
     ret.push_back(make_pair("addresses", addresses));
     
     return ret;
-}
-
-UniValue rescanfromheight(const UniValue& params, bool fHelp)
-{
-    if (!EnsureWalletIsAvailable(fHelp))
-        return NullUniValue;
-
-    if (fHelp || params.size() < 1 || params.size() > 2 )
-        throw runtime_error(
-            "rescanfromheight startHeight finishHeight\n"
-            "\nRescans keys in your wallet from a height.\n"
-            "\nArguments:\n"
-            "1. startHeight               (integer, required, default=0) start at block height\n"
-            "2. finishHeight              (integer, optional, default=tip) finish at block height?\n"
-            "\nNote: This call can take minutes to complete for many blocks.\n"
-            "\nExamples:\n"
-            + HelpExampleCli("rescanfromheight", "1280 50000") +
-            "\nAs a JSON-RPC call\n"
-            + HelpExampleRpc("rescanfromheight", "1280 50000")
-        );
-
-    LOCK2(cs_main, pwalletMain->cs_wallet);
-    
-    int32_t startHeight = params[0].get_int();
-    if ( startHeight < 0 || startHeight > chainActive.Height() )
-        throw JSONRPCError(RPC_WALLET_ERROR, "Start height is out of range.");
-    
-    int32_t finishHeight = chainActive.Height();
-    if ( params.size() == 2 )
-        finishHeight = params[1].get_int();
-    if ( finishHeight < 0 || finishHeight > chainActive.Height() )
-        throw JSONRPCError(RPC_WALLET_ERROR, "Finish height is out of range.");
-    
-    pwalletMain->ScanForWalletTransactions(chainActive[startHeight], true, chainActive[finishHeight]);
-    
-    return(0);
 }
 
 UniValue rescanfromheight(const UniValue& params, bool fHelp, const CPubKey& mypk)
