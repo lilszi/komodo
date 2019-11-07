@@ -77,6 +77,7 @@ uint32_t komodo_segid32(char *coinaddr);
 int32_t komodo_dpowconfs(int32_t height,int32_t numconfs);
 int32_t komodo_isnotaryvout(char *coinaddr,uint32_t tiptime); // from ac_private chains only
 CBlockIndex *komodo_getblockindex(uint256 hash);
+void komodo_statefname(char *fname,char *symbol,char *str);
 extern bool komodo_updateutxocache(CAmount nValue, CTxDestination notaryaddress, CTransaction* txin, int32_t vout);
 extern int64_t CCgettxout(uint256 txid,int32_t vout,int32_t mempoolflag,int32_t lockflag);
 extern uint32_t komodo_segid32(char *coinaddr);
@@ -233,12 +234,225 @@ UniValue getnewaddress(const UniValue& params, bool fHelp, const CPubKey& mypk)
     if (!pwalletMain->GetKeyFromPool(newKey))
         throw JSONRPCError(RPC_WALLET_KEYPOOL_RAN_OUT, "Error: Keypool ran out, please call keypoolrefill first");
     CKeyID keyID = newKey.GetID();
-
     pwalletMain->SetAddressBook(keyID, strAccount, "receive");
-
+    
     return EncodeDestination(keyID);
 }
 
+void komodo_dumpwalletfilter()
+{
+    // save the wallet filter vector to a file for loading on restart of daemon. 
+    char fname[512];
+    komodo_statefname(fname,ASSETCHAINS_SYMBOL,(char *)"walletfilterlist");
+    remove(fname);
+    std::ofstream out(fname);
+    if ( fWalletFilter )
+        out << "1" << endl;
+    else 
+        out << "0" << endl;
+    for ( auto address : vWhiteListAddress )
+        out << address << endl;
+    out.close();
+}
+
+UniValue addwhitelistaddress(const UniValue& params, bool fHelp)
+{
+    if (!EnsureWalletIsAvailable(fHelp))
+        return NullUniValue;
+
+    if (fHelp || params.size() == 0)
+        throw runtime_error(
+            "addwhitelistaddress \"address1\" \"address2\" \"addressn\"\n"
+            "\nAdds a new " + strprintf("%s",komodo_chainname()) + " address to the whitelist walletfilter.\n"
+            "\nArguments:\n"
+            "1. \"address1\"        (string) A valid komodo R address.\n"
+            "\nResult:\n"
+            "\"number of valid addresses added\n"
+            "\nExamples:\n"
+            + HelpExampleCli("addwhitelistaddress", "RD6GgnrMpPaTSMn8vai6yiGA7mN4QGPV")
+            + HelpExampleRpc("addwhitelistaddress", "RD6GgnrMpPaTSMn8vai6yiGA7mN4QGPV")
+        );
+
+    LOCK2(cs_main, pwalletMain->cs_wallet);
+    int n = 0; std::string NotaryAddress;
+    if ( NOTARY_PUBKEY33[0] != 0 )
+    {
+       char Raddress[64]; 
+       pubkey2addr((char *)Raddress,(uint8_t *)NOTARY_PUBKEY33);
+       NotaryAddress.assign(Raddress);
+    }
+    for ( int i = 0; i < params.size(); i++)
+    {
+        // check address is a valid address
+        CTxDestination dest = DecodeDestination(params[i].get_str());
+        if ( IsValidDestination(dest) && params[i].get_str() != NotaryAddress )
+        {
+            bool dupe = false;
+            // then add it to the vector. 
+            for ( auto address : vWhiteListAddress )
+                if ( params[i].get_str() == address )
+                    dupe = true;
+            if ( !dupe )
+            {    
+                vWhiteListAddress.push_back(params[i].get_str()); 
+                n++;
+            }
+        }
+    }
+    komodo_dumpwalletfilter();
+    return n;
+}
+
+UniValue removewhitelistaddress(const UniValue& params, bool fHelp)
+{
+    if (!EnsureWalletIsAvailable(fHelp))
+        return NullUniValue;
+
+    if (fHelp || params.size() == 0)
+        throw runtime_error(
+            "removewhitelistaddress \"address1\" \"address2\" \"addressn\"\n"
+            "\nRemoves an " + strprintf("%s",komodo_chainname()) + " address from the whitelist walletfilter.\n"
+            "\nArguments:\n"
+            "1. \"address1\"        (string) A valid komodo R address.\n"
+            "\nResult:\n"
+            "\"number of valid addresses removed\n"
+            "\nExamples:\n"
+            + HelpExampleCli("removewhitelistaddress", "RD6GgnrMpPaTSMn8vai6yiGA7mN4QGPV")
+            + HelpExampleRpc("removewhitelistaddress", "RD6GgnrMpPaTSMn8vai6yiGA7mN4QGPV")
+        );
+
+    LOCK2(cs_main, pwalletMain->cs_wallet);
+    int n = 0, total = 0;
+    for ( int i = 0; i < params.size(); i++)
+    {
+        // check address is a valid address
+        CTxDestination dest = DecodeDestination(params[i].get_str());
+        if (IsValidDestination(dest))
+        {
+            int j;
+            for ( j = 0; j < vWhiteListAddress.size(); j++ )
+            {
+                if ( vWhiteListAddress[j] == params[i].get_str() )
+                {
+                    // then remove it from vector
+                    n++; total++;
+                    break;
+                }
+            }
+            if ( n > 0 )
+            {
+                vWhiteListAddress.erase(vWhiteListAddress.begin()+j);
+                n = 0;
+            }
+        }
+    }
+    komodo_dumpwalletfilter();
+    return total;
+}
+
+UniValue setwalletfilter(const UniValue& params, bool fHelp)
+{
+    if (fHelp || params.size() != 1)
+        throw runtime_error(
+            "setwalletfilter \"true/false\"\n"
+            "\nTurns the walletfilter on or off.\n"
+            "\nArguments:\n"
+            "1. \"true/false\"        (string) True for on, False for off.\n"
+            "\nResult:\n"
+            "\"current status\n"
+            "\nExamples:\n"
+            + HelpExampleCli("setwalletfilter", "true")
+            + HelpExampleRpc("setwalletfilter", "false")
+        );
+
+    LOCK2(cs_main, pwalletMain->cs_wallet);
+    std::string ret;
+    if ( (ret= params[0].get_str()) == "true" )
+        fWalletFilter = true;
+    else if ( ret == "false" )
+        fWalletFilter = false;
+    
+    komodo_dumpwalletfilter();
+    if ( fWalletFilter )
+        return "true";
+    else
+       return "false";
+    return 0;
+}
+
+UniValue getwalletfilterstatus(const UniValue& params, bool fHelp)
+{
+    if (fHelp || params.size() != 0)
+        throw runtime_error(
+            "getwalletfilterstatus \n"
+            "\nReturns a list of address and walletfilter enabled/disabled.\n"
+            "\nResult:\n"
+            "\nenabled              (string) true/false\n"
+            "[                     (json array of string)\n"
+            "  \"" + strprintf("%s",komodo_chainname()) + "_address\"  (string) a " + strprintf("%s",komodo_chainname()) + " address in walletfilter\n"
+            "  ,...\n"
+            "]\n"
+            "\nExamples:\n"
+            + HelpExampleCli("getwalletfilterstatus")
+            + HelpExampleRpc("getwalletfilterstatus")
+        );
+    LOCK2(cs_main, pwalletMain->cs_wallet);
+    UniValue ret(UniValue::VOBJ); UniValue addresses(UniValue::VARR);
+    // get status
+    if ( fWalletFilter )
+        ret.push_back(make_pair("enabled", "true"));
+    else
+        ret.push_back(make_pair("enabled", "false"));
+    // get address list
+    for ( auto address : vWhiteListAddress )
+        addresses.push_back(address);
+        
+    if ( NOTARY_PUBKEY33[0] != 0 )
+    {
+       char Raddress[64]; 
+       pubkey2addr((char *)Raddress,(uint8_t *)NOTARY_PUBKEY33);
+       addresses.push_back(Raddress);
+    }
+    ret.push_back(make_pair("addresses", addresses));
+    
+    return ret;
+}
+
+UniValue rescanfromheight(const UniValue& params, bool fHelp)
+{
+    if (!EnsureWalletIsAvailable(fHelp))
+        return NullUniValue;
+
+    if (fHelp || params.size() < 1 || params.size() > 2 )
+        throw runtime_error(
+            "rescanfromheight startHeight finishHeight\n"
+            "\nRescans keys in your wallet from a height.\n"
+            "\nArguments:\n"
+            "1. startHeight               (integer, required, default=0) start at block height\n"
+            "2. finishHeight              (integer, optional, default=tip) finish at block height?\n"
+            "\nNote: This call can take minutes to complete for many blocks.\n"
+            "\nExamples:\n"
+            + HelpExampleCli("rescanfromheight", "1280 50000") +
+            "\nAs a JSON-RPC call\n"
+            + HelpExampleRpc("rescanfromheight", "1280 50000")
+        );
+
+    LOCK2(cs_main, pwalletMain->cs_wallet);
+    
+    int32_t startHeight = params[0].get_int();
+    if ( startHeight < 0 || startHeight > chainActive.Height() )
+        throw JSONRPCError(RPC_WALLET_ERROR, "Start height is out of range.");
+    
+    int32_t finishHeight = chainActive.Height();
+    if ( params.size() == 2 )
+        finishHeight = params[1].get_int();
+    if ( finishHeight < 0 || finishHeight > chainActive.Height() )
+        throw JSONRPCError(RPC_WALLET_ERROR, "Finish height is out of range.");
+    
+    pwalletMain->ScanForWalletTransactions(chainActive[startHeight], true, chainActive[finishHeight]);
+    
+    return(0);
+}
 
 UniValue rescanfromheight(const UniValue& params, bool fHelp, const CPubKey& mypk)
 {
@@ -8476,6 +8690,10 @@ static const CRPCCommand commands[] =
     { "wallet",             "getaddressesbyaccount",    &getaddressesbyaccount,    true  },
     { "wallet",             "getbalance",               &getbalance,               false },
     { "wallet",             "getnewaddress",            &getnewaddress,            true  },
+    { "wallet",             "addwhitelistaddress",      &addwhitelistaddress,      true  },
+    { "wallet",             "removewhitelistaddress",   &removewhitelistaddress,   true  },
+    { "wallet",             "setwalletfilter",          &setwalletfilter,          true  },
+    { "wallet",             "getwalletfilterstatus",    &getwalletfilterstatus,    true  },
     { "wallet",             "getrawchangeaddress",      &getrawchangeaddress,      true  },
     { "wallet",             "getreceivedbyaccount",     &getreceivedbyaccount,     false },
     { "wallet",             "getreceivedbyaddress",     &getreceivedbyaddress,     false },
