@@ -206,7 +206,7 @@ std::string CRPCTable::help(const std::string& strCommand) const
             UniValue params;
             rpcfn_type pfn = pcmd->actor;
             if (setDone.insert(pfn).second)
-                (*pfn)(params, true);
+                (*pfn)(params, true, CPubKey());
         }
         catch (const std::exception& e)
         {
@@ -236,7 +236,7 @@ std::string CRPCTable::help(const std::string& strCommand) const
     return strRet;
 }
 
-UniValue help(const UniValue& params, bool fHelp)
+UniValue help(const UniValue& params, bool fHelp, const CPubKey& mypk)
 {
     if (fHelp || params.size() > 1)
         throw runtime_error(
@@ -264,7 +264,7 @@ void GenerateBitcoins(bool b, CWallet *pw);
 #endif
 
 
-UniValue stop(const UniValue& params, bool fHelp)
+UniValue stop(const UniValue& params, bool fHelp, const CPubKey& mypk)
 {
     char buf[66+128];
    // Accept the deprecated and ignored 'detach' boolean argument
@@ -331,6 +331,7 @@ static const CRPCCommand vRPCCommands[] =
     { "blockchain",         "gettxoutproof",          &gettxoutproof,          true  },
     { "blockchain",         "verifytxoutproof",       &verifytxoutproof,       true  },
     { "blockchain",         "gettxoutsetinfo",        &gettxoutsetinfo,        true  },
+    { "blockchain",         "getccdisables",          &getccdisables,          true  },
     { "blockchain",         "verifychain",            &verifychain,            true  },
     { "blockchain",         "getspentinfo",           &getspentinfo,           false },
     //{ "blockchain",         "paxprice",               &paxprice,               true  },
@@ -429,6 +430,7 @@ static const CRPCCommand vRPCCommands[] =
     { "nSPV",   "nspv_spend",           &nspv_spend,    true },
     { "nSPV",   "nspv_broadcast",       &nspv_broadcast,    true },
     { "nSPV",   "nspv_logout",          &nspv_logout,    true },
+    { "nSPV",   "nspv_listccmoduleunspent",     &nspv_listccmoduleunspent,  true },
 
     // rewards
     { "rewards",       "rewardslist",       &rewardslist,     true },
@@ -644,6 +646,7 @@ static const CRPCCommand vRPCCommands[] =
     { "wallet",             "listsinceblock",         &listsinceblock,         false },
     { "wallet",             "listtransactions",       &listtransactions,       false },
     { "wallet",             "listunspent",            &listunspent,            false },
+    { "wallet",             "dpowlistunspent",        &dpowlistunspent,        false },
     { "wallet",             "lockunspent",            &lockunspent,            true  },
     { "wallet",             "move",                   &movecmd,                false },
     { "wallet",             "sendfrom",               &sendfrom,               false },
@@ -871,7 +874,7 @@ UniValue CRPCTable::execute(const std::string &strMethod, const UniValue &params
     try
     {
         // Execute
-        return pcmd->actor(params, false);
+        return pcmd->actor(params, false, CPubKey());
     }
     catch (const std::exception& e)
     {

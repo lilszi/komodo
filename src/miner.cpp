@@ -386,7 +386,7 @@ CBlockTemplate* CreateNewBlock(CPubKey _pk,const CScript& _scriptPubKeyIn, int32
                     }
                     dPriority += (double)nValueIn * nConf;
                 }
-                if ( numSN != 0 && notarypubkeys[0][0] != 0 && TMP_NotarisationNotaries.size() >= numSN / 5 )
+                if ( numSN != 0 && notarypubkeys[0][0] != 0 && TMP_NotarisationNotaries.size() >= LABSMINSIGS(numSN) )
                 {
                     // check a notary didnt sign twice (this would be an invalid notarisation later on and cause problems)
                     std::set<int> checkdupes( TMP_NotarisationNotaries.begin(), TMP_NotarisationNotaries.end() );
@@ -1803,6 +1803,8 @@ void static BitcoinMiner()
                             }
                             if ( dispflag != 0 )
                                 fprintf(stderr," <- prev minerids from ht.%d notary.%d gpucount.%d %.2f%% t.%u\n",pindexPrev->GetHeight(),notaryid,gpucount,100.*(double)gpucount/j,(uint32_t)time(NULL));
+                            else 
+                                fprintf(stderr,"ht.%d notary.%d gpucount.%d %.2f%% t.%u\n",pindexPrev->GetHeight(),notaryid,gpucount,100.*(double)gpucount/j,(uint32_t)time(NULL));
                         }
                         for (j=0; j<65; j++)
                             if ( mids[j] == notaryid )

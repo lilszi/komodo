@@ -1193,6 +1193,11 @@ bool ContextualCheckTransaction(int32_t slowflag,const CBlock *block, CBlockInde
         if (tx.fOverwintered && tx.nVersionGroupId != SAPLING_VERSION_GROUP_ID)
         {
             //return state.DoS(dosLevel, error("CheckTransaction(): invalid Sapling tx version"),REJECT_INVALID, "bad-sapling-tx-version-group-id");
+            if ( 0 )
+            {
+                string strHex = EncodeHexTx(tx);
+                fprintf(stderr,"invalid Sapling rawtx.%s\n",strHex.c_str());
+            }
             return state.DoS(isInitBlockDownload() ? 0 : dosLevel,
                              error("CheckTransaction(): invalid Sapling tx version"),
                              REJECT_INVALID, "bad-sapling-tx-version-group-id");
@@ -1808,7 +1813,7 @@ bool AcceptToMemoryPool(CTxMemPool& pool, CValidationState &state, const CTransa
     }
     // DoS level set to 10 to be more forgiving.
     // Check transaction contextually against the set of consensus rules which apply in the next block to be mined.
-    if (!fSkipExpiry && !ContextualCheckTransaction(0,0,0,tx, state, nextBlockHeight, (dosLevel == -1) ? 10 : dosLevel,0))
+    if (!fSkipExpiry && !ContextualCheckTransaction(0,0,0,tx, state, nextBlockHeight, (dosLevel == -1) ? 10 : dosLevel))
     {
         return error("AcceptToMemoryPool: ContextualCheckTransaction failed");
     }
@@ -2079,8 +2084,6 @@ bool AcceptToMemoryPool(CTxMemPool& pool, CValidationState &state, const CTransa
             }
         }
     }
-
-    SyncWithWallets(tx, NULL);
 
     return true;
 }
@@ -3477,8 +3480,9 @@ bool ConnectBlock(const CBlock& block, CValidationState& state, CBlockIndex* pin
         // if notaries create a notarisation even if its not in this chain it will need to be mined inside its own block! 
         if ( notarisationTx == 1 )
         {
+            int32_t opretOffset = block.vtx[0].vout.back().scriptPubKey.IsOpReturn();
             // Check if the notaries have been paid.
-            if ( block.vtx[0].vout.size() == 1 )
+            if ( block.vtx[0].vout.size() == 1+opretOffset )
                 return state.DoS(100, error("ConnectBlock(): Notaries have not been paid!"),
                                 REJECT_INVALID, "bad-cb-amount");
             // calculate the notaries compensation and validate the amounts and pubkeys are correct.
@@ -4452,9 +4456,37 @@ static bool ActivateBestChainStep(bool fSkipdpow, CValidationState &state, CBloc
     notarizedht = komodo_notarized_height(&prevMoMheight,&notarizedhash,&txid);
     if ( !fSkipdpow && pindexFork != 0 && pindexOldTip->GetHeight() > notarizedht && pindexFork->GetHeight() < notarizedht )
     {
-        fprintf(stderr,"pindexOldTip->GetHeight().%d > notarizedht %d && pindexFork->GetHeight().%d is < notarizedht %d, so ignore it\n",(int32_t)pindexFork->GetHeight(),notarizedht,(int32_t)pindexOldTip->GetHeight(),notarizedht);
-        return state.DoS(100, error("ActivateBestChainStep(): pindexOldTip->GetHeight().%d > notarizedht %d && pindexFork->GetHeight().%d is < notarizedht %d, so ignore it",(int32_t)pindexFork->GetHeight(),notarizedht,(int32_t)pindexOldTip->GetHeight(),notarizedht),
-                    REJECT_INVALID, "past-notarized-height");
+        LogPrintf("pindexOldTip->GetHeight().%d > notarizedht %d && pindexFork->GetHeight().%d is < notarizedht %d, so ignore it\n",(int32_t)pindexOldTip->GetHeight(),notarizedht,(int32_t)pindexFork->GetHeight(),notarizedht);
+        // *** DEBUG ***
+        if (1)
+        {
+            const CBlockIndex *pindexLastNotarized = mapBlockIndex[notarizedhash];
+            auto msg = "- " + strprintf(_("Current tip : %s, height %d, work %s"),
+                                pindexOldTip->phashBlock->GetHex(), pindexOldTip->GetHeight(), pindexOldTip->chainPower.chainWork.GetHex()) + "\n" +
+                "- " + strprintf(_("New tip     : %s, height %d, work %s"),
+                                pindexMostWork->phashBlock->GetHex(), pindexMostWork->GetHeight(), pindexMostWork->chainPower.chainWork.GetHex()) + "\n" +
+                "- " + strprintf(_("Fork point  : %s, height %d"),
+                                pindexFork->phashBlock->GetHex(), pindexFork->GetHeight()) + "\n" +
+                "- " + strprintf(_("Last ntrzd  : %s, height %d"),
+                                pindexLastNotarized->phashBlock->GetHex(), pindexLastNotarized->GetHeight());
+            LogPrintf("[ Debug ]\n%s\n",msg);
+
+            int nHeight = pindexFork ? pindexFork->GetHeight() : -1;
+            int nTargetHeight = std::min(nHeight + 32, pindexMostWork->GetHeight());
+            
+            LogPrintf("[ Debug ] nHeight = %d, nTargetHeight = %d\n", nHeight, nTargetHeight);
+
+            CBlockIndex *pindexIter = pindexMostWork->GetAncestor(nTargetHeight);
+            while (pindexIter && pindexIter->GetHeight() != nHeight) {
+                LogPrintf("[ Debug -> New blocks list ] %s, height %d\n", pindexIter->phashBlock->GetHex(), pindexIter->GetHeight());
+                pindexIter = pindexIter->pprev;
+            }
+        }
+
+        CValidationState tmpstate;
+        InvalidateBlock(tmpstate,pindexMostWork); // trying to invalidate longest chain, which tried to reorg notarized chain (in case of fork point below last notarized block)
+        return state.DoS(100, error("ActivateBestChainStep(): pindexOldTip->GetHeight().%d > notarizedht %d && pindexFork->GetHeight().%d is < notarizedht %d, so ignore it",(int32_t)pindexOldTip->GetHeight(),notarizedht,(int32_t)pindexFork->GetHeight(),notarizedht),
+                REJECT_INVALID, "past-notarized-height");
     }
     // - On ChainDB initialization, pindexOldTip will be null, so there are no removable blocks.
     // - If pindexMostWork is in a chain that doesn't have the same genesis block as our chain,

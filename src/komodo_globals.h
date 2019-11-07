@@ -56,6 +56,7 @@ bool VERUS_MINTBLOCKS;
 std::vector<uint8_t> Mineropret;
 std::vector<std::string> vWhiteListAddress;
 bool fWalletFilter = false;
+std::vector<struct komodo_utxocacheitem> vIguanaUTXOs;
 char NOTARYADDRS[64][64];
 char NOTARY_ADDRESSES[NUM_KMD_SEASONS][64][64];
 

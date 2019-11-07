@@ -16,11 +16,11 @@
 #ifndef KOMODO_DEFS_H
 #define KOMODO_DEFS_H
 #include "arith_uint256.h"
-
+#include "chain.h"
 #include "komodo_nk.h"
 
 #define KOMODO_EARLYTXID_HEIGHT 100
-#define ADAPTIVEPOW_CHANGETO_DEFAULTON 1572480000
+//#define ADAPTIVEPOW_CHANGETO_DEFAULTON 1572480000
 #define ASSETCHAINS_MINHEIGHT 128
 #define ASSETCHAINS_MAX_ERAS 7
 #define KOMODO_ELECTION_GAP 2000
@@ -34,6 +34,7 @@
 #define KOMODO_SAPLING_ACTIVATION 1544832000 // Dec 15th, 2018
 #define KOMODO_SAPLING_DEADLINE 1550188800 // Feb 15th, 2019
 #define _COINBASE_MATURITY 100
+#define KOMODO_MAX_UTXOCACHE_SIZE 64
 
 // KMD Notary Seasons 
 // 1: May 1st 2018 1530921600
@@ -276,7 +277,7 @@ extern uint64_t ASSETCHAINS_SUPPLY, ASSETCHAINS_FOUNDERS_REWARD;
 extern uint64_t ASSETCHAINS_TIMELOCKGTE;
 extern uint32_t ASSETCHAINS_ALGO, ASSETCHAINS_VERUSHASH,ASSETCHAINS_EQUIHASH,KOMODO_INITDONE;
 
-extern int32_t KOMODO_MININGTHREADS,KOMODO_LONGESTCHAIN,ASSETCHAINS_SEED,IS_KOMODO_NOTARY,USE_EXTERNAL_PUBKEY,KOMODO_CHOSEN_ONE,KOMODO_ON_DEMAND,KOMODO_PASSPORT_INITDONE,ASSETCHAINS_STAKED,KOMODO_NSPV;
+extern int32_t KOMODO_MININGTHREADS,KOMODO_LONGESTCHAIN,ASSETCHAINS_SEED,IS_KOMODO_NOTARY,IS_STAKED_NOTARY,USE_EXTERNAL_PUBKEY,KOMODO_CHOSEN_ONE,KOMODO_ON_DEMAND,KOMODO_PASSPORT_INITDONE,ASSETCHAINS_STAKED,KOMODO_NSPV;
 extern uint64_t ASSETCHAINS_COMMISSION, ASSETCHAINS_LASTERA,ASSETCHAINS_CBOPRET;
 extern bool VERUS_MINTBLOCKS;
 extern uint64_t ASSETCHAINS_REWARD[ASSETCHAINS_MAX_ERAS+1], ASSETCHAINS_NOTARY_PAY[ASSETCHAINS_MAX_ERAS+1], ASSETCHAINS_TIMELOCKGTE, ASSETCHAINS_NONCEMASK[],ASSETCHAINS_NK[2];
@@ -309,6 +310,7 @@ extern int32_t ASSETCHAINS_EARLYTXIDCONTRACT;
 int tx_height( const uint256 &hash );
 extern std::vector<std::string> vWhiteListAddress;
 extern bool fWalletFilter;
+extern std::vector<struct komodo_utxocacheitem> vIguanaUTXOs;
 extern std::map <std::int8_t, int32_t> mapHeightEvalActivate;
 void komodo_netevent(std::vector<uint8_t> payload);
 int32_t getacseason(uint32_t timestamp);
@@ -345,6 +347,14 @@ int32_t komodo_notarized_bracket(struct notarized_checkpoint *nps[2],int32_t hei
 arith_uint256 komodo_adaptivepow_target(int32_t height,arith_uint256 bnTarget,uint32_t nTime);
 
 uint256 Parseuint256(const char *hexstr);
+void komodo_sendmessage(int32_t minpeers, int32_t maxpeers, const char *message, std::vector<uint8_t> payload);
+CBlockIndex *komodo_getblockindex(uint256 hash);
+int32_t komodo_nextheight();
+CBlockIndex *komodo_blockindex(uint256 hash);
+CBlockIndex *komodo_chainactive(int32_t height);
+int32_t komodo_blockheight(uint256 hash);
+bool komodo_txnotarizedconfirmed(uint256 txid);
+int32_t komodo_blockload(CBlock& block, CBlockIndex *pindex);
 
 #ifndef KOMODO_NSPV_FULLNODE
 #define KOMODO_NSPV_FULLNODE (KOMODO_NSPV <= 0)

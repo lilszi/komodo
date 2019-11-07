@@ -17,7 +17,7 @@
 #include <Fulfillment.h>
 #include "include/cJSON.h"
 #include "asn/asn_application.h"
-#include "cryptoconditions.h"
+#include "../include/cryptoconditions.h"
 
 #ifndef INTERNAL_H
 #define INTERNAL_H

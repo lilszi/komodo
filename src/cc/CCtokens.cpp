@@ -824,9 +824,8 @@ std::string CreateToken(int64_t txfee, int64_t tokensupply, std::string name, st
 		txfee = 10000;
 	mypk = pubkey2pk(Mypubkey());
 
-	if (AddNormalinputs(mtx, mypk, tokensupply + 2 * txfee, 64) > 0)
+	if (AddNormalinputs2(mtx, tokensupply + 2 * txfee, 64) > 0)  // add normal inputs only from mypk
 	{
-
         int64_t mypkInputs = TotalPubkeyNormalInputs(mtx, mypk);  
         if (mypkInputs < tokensupply) {     // check that tokens amount are really issued with mypk (because in the wallet there maybe other privkeys)
             CCerror = "some inputs signed not with -pubkey=pk";
@@ -1026,7 +1025,7 @@ UniValue TokenInfo(uint256 tokenid)
 UniValue TokenList()
 {
 	UniValue result(UniValue::VARR);
-	std::vector<std::pair<CAddressIndexKey, CAmount> > addressIndex;
+	std::vector<uint256> txids;
     std::vector<std::pair<CAddressUnspentKey, CAddressUnspentValue> > addressIndexCCMarker;
 
 	struct CCcontract_info *cp, C; uint256 txid, hashBlock;
@@ -1043,9 +1042,9 @@ UniValue TokenList()
         }
     };
 
-	SetCCtxids(addressIndex, cp->normaladdr,false);                      // find by old normal addr marker
-   	for (std::vector<std::pair<CAddressIndexKey, CAmount> >::const_iterator it = addressIndex.begin(); it != addressIndex.end(); it++) 	{
-        addTokenId(it->first.txhash);
+	SetCCtxids(txids, cp->normaladdr,false,cp->evalcode,zeroid,'c');                      // find by old normal addr marker
+   	for (std::vector<uint256>::const_iterator it = txids.begin(); it != txids.end(); it++) 	{
+        addTokenId(*it);
 	}
 
     SetCCunspents(addressIndexCCMarker, cp->unspendableCCaddr,true);    // find by burnable validated cc addr marker

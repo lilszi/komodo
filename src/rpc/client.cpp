@@ -87,6 +87,7 @@ static const CRPCConvertParam vRPCConvertParams[] =
     { "listunspent", 0 },
     { "listunspent", 1 },
     { "listunspent", 2 },
+    { "dpowlistunspent", 0 },
     { "getblock", 1 },
     { "getblockheader", 1 },
     { "getchaintxstats", 0  },
@@ -153,6 +154,7 @@ static const CRPCConvertParam vRPCConvertParams[] =
     { "z_mergetoaddress", 2},
     { "z_mergetoaddress", 3},
     { "z_mergetoaddress", 4},
+    { "z_viewtransaction", 1},
     { "z_sendmany", 1},
     { "z_sendmany", 2},
     { "z_sendmany", 3},
@@ -179,6 +181,7 @@ static const CRPCConvertParam vRPCConvertParams[] =
     { "height_MoM", 1},
     { "calc_MoM", 2},
     { "migrate_completeimporttransaction", 1},
+    { "getccdisables", 0},
 };
 
 class CRPCConvertTable
