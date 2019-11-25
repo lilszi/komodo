@@ -97,6 +97,10 @@ extern void ThreadSendAlert();
 extern bool komodo_dailysnapshot(int32_t height);
 extern void komodo_init(int32_t height);
 extern int32_t KOMODO_LOADINGBLOCKS;
+extern bool VERUS_MINTBLOCKS;
+extern char ASSETCHAINS_SYMBOL[];
+extern int32_t KOMODO_SNAPSHOT_INTERVAL;
+
 extern void komodo_init(int32_t height);
 
 ZCJoinSplit* pzcashParams = NULL;
@@ -1236,6 +1240,8 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
     }
 
     // Initialize elliptic curve code
+    std::string sha256_algo = SHA256AutoDetect();
+    LogPrintf("Using the '%s' SHA256 implementation\n", sha256_algo);
     ECC_Start();
     globalVerifyHandle.reset(new ECCVerifyHandle());
 
